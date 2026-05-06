@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Stock Tracker UI
 
-## Getting Started
+An AI-powered stock tracking dashboard built with Next.js 15. Displays market regime, signal distribution, momentum rankings, watchlist analysis, portfolio performance, and a reinforcement-learning trading agent — all in a dark terminal-style UI.
 
-First, run the development server:
+**Live demo:** https://stock-tracker-ui-smoky.vercel.app
+
+> The live demo runs in mock-data mode. The backend API is private.
+
+---
+
+## Features
+
+| Page | Description |
+|---|---|
+| **Overview** | Daily briefing — market regime, VIX, signal breadth, portfolio quick view, top momentum leaders |
+| **Screener** | Full universe screener (~523 tickers) with signal badges, momentum deltas, sector/theme breakdown |
+| **Watchlist** | Curated watchlist with RS rank, trend, extension signal, and buy-candidate highlights |
+| **Snapshot** | Entry zone analysis — entry range, stop-loss, target price, risk/reward, trade probability |
+| **Portfolio** | Position tracker with P&L, day change %, benchmark comparison (SPY/QQQ/SMH), and alpha |
+| **RL vs Human** | Reinforcement-learning paper trading agent vs human portfolio — equity curve, trades, live signals |
+
+## Tech Stack
+
+- **Next.js 15** (App Router, server components)
+- **TypeScript**
+- **Tailwind CSS v4**
+- **shadcn/ui** (Badge, Button, Card, Select, Table, Tabs, Skeleton)
+
+---
+
+## Local Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a `.env.local` file in the project root:
 
-## Learn More
+```env
+# Enable mock data (no backend required)
+NEXT_PUBLIC_USE_MOCK=true
 
-To learn more about Next.js, take a look at the following resources:
+# Real backend (leave unset when using mock)
+NEXT_PUBLIC_API_URL=https://your-api-url
+INTERNAL_API_TOKEN=your-secret-token
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Mock mode** (`NEXT_PUBLIC_USE_MOCK=true`) generates ~523 realistic tickers with deterministic pseudo-random data — no backend needed. All pages are fully functional.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**Real API mode** requires a running instance of the private stock-tracker backend. Set `NEXT_PUBLIC_API_URL` and `INTERNAL_API_TOKEN` and leave `NEXT_PUBLIC_USE_MOCK` unset or set to `false`.
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Deployed on [Vercel](https://vercel.com). Set `NEXT_PUBLIC_USE_MOCK=true` in Vercel project environment variables for a self-contained demo deployment.
