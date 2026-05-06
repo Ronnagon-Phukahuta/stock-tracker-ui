@@ -12,6 +12,11 @@ const NAV_LINKS = [
   { href: "/rl", label: "RL vs Human" },
 ];
 
+async function handleLogout() {
+  await fetch('/api/auth/logout', { method: 'POST' })
+  window.location.href = '/login'
+}
+
 export function NavBar() {
   const pathname = usePathname();
   return (
@@ -32,6 +37,12 @@ export function NavBar() {
           {label}
         </Link>
       ))}
+      <button
+        onClick={handleLogout}
+        className="ml-auto text-xs px-3 py-1 rounded font-mono text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors"
+      >
+        Logout
+      </button>
     </nav>
   );
 }
