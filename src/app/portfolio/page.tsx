@@ -1,11 +1,12 @@
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-import { getPrices, getMomentum, getLatestStockRankings, getPortfolioPositions } from "@/lib/api";
+import { getPrices, getMomentum, getLatestStockRankings, getPortfolioPositions, getOptionsTrades, OptionsTrade } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { PortfolioTable, PortfolioRow } from "@/components/portfolio-table";
 import { PortfolioEditor } from "@/components/portfolio-editor";
 import { CashInvestedEditor } from "@/components/portfolio-cash-editor";
+import { OptionsTradesManager } from "@/components/options-trades-manager";
 
 const PORTFOLIO_START_DATE = "2024-07-25";
 const BENCHMARKS = ["SPY", "QQQ", "SMH"] as const;
@@ -21,6 +22,11 @@ export default async function PortfolioPage() {
   const positionsResult = await getPortfolioPositions().catch(() => null);
   const positions = positionsResult?.items ?? [];
   const totalCashInvested = positionsResult?.total_cash_invested ?? 0;
+
+  const optionsTradesResult = await getOptionsTrades().catch(() => null);
+  const optionsTrades: OptionsTrade[] = (optionsTradesResult?.items ?? []).sort(
+    (a, b) => b.date.localeCompare(a.date)
+  );
 
   const earliestDate =
     positions.length > 0
@@ -430,6 +436,8 @@ export default async function PortfolioPage() {
             </table>
           </div>
         </section>
+
+        <OptionsTradesManager initialTrades={optionsTrades} />
       </div>
     </main>
   );

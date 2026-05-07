@@ -598,3 +598,22 @@ export function postDuckDbRead(body: DuckDbReadRequest): Promise<DuckDbReadRespo
     body: JSON.stringify(body),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Options Trading
+// ---------------------------------------------------------------------------
+
+export interface OptionsTrade {
+  date: string;
+  ticker: string;
+  type: string;
+  strike: number;
+  expiry: string;
+  contracts: number;
+  pnl: number;
+  note?: string | null;
+}
+
+export function getOptionsTrades(): Promise<ListResponse<OptionsTrade>> {
+  return apiFetch("/v1/portfolio/options-trades");
+}
