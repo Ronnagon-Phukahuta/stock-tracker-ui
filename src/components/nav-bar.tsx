@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: "/snapshot", label: "Snapshot" },
   { href: "/portfolio", label: "Portfolio" },
   { href: "/rl", label: "RL vs Human" },
+  { href: "/options", label: "Options" },
 ];
 
 async function handleLogout() {

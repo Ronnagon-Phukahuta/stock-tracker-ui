@@ -617,3 +617,79 @@ export interface OptionsTrade {
 export function getOptionsTrades(): Promise<ListResponse<OptionsTrade>> {
   return apiFetch("/v1/portfolio/options-trades");
 }
+
+// ---------------------------------------------------------------------------
+// Options Signal
+// ---------------------------------------------------------------------------
+
+export interface OptionsSignalTicker {
+  ticker: string;
+  action: string;
+  suggested_action: string | null;
+  signal_strength: string | null;
+  gate_reason: string | null;
+  within_budget: boolean | null;
+  latest_est_cost: number | null;
+  hit_rate: number | null;
+  hit_rate_recent: number | null;
+  score_holistic: number | null;
+  rsi: number | null;
+  bb_position: string | null;
+  stoch_k: number | null;
+  call_signals: number | null;
+  put_signals: number | null;
+  regime_label: string | null;
+  dte_range: string | null;
+  take_profit_pct: number | null;
+  stop_loss_pct: number | null;
+  candle_direction: string | null;
+  candle_streak_days: number | null;
+}
+
+export interface OptionsSignalResponse {
+  generated_at: string | null;
+  action_now: string;
+  action_bias_count: string;
+  market_structure: string | null;
+  market_structure_reason: string | null;
+  vix_latest: number | null;
+  vix_label: string | null;
+  breadth_pct: number | null;
+  tickers: OptionsSignalTicker[];
+}
+
+export function getOptionsSignal(): Promise<OptionsSignalResponse> {
+  return apiFetch("/v1/options/signal");
+}
+
+// ---------------------------------------------------------------------------
+// Candle Analysis
+// ---------------------------------------------------------------------------
+
+export interface CandleAnalysisRow {
+  n: number;
+  direction: string;
+  obs: number;
+  reversal_pct: number;
+  fwd1_pct: number;
+  fwd3_pct: number;
+  fwd7_pct: number;
+  is_threshold: boolean;
+}
+
+export interface CandleAnalysisRegime {
+  total_days: number;
+  rows: CandleAnalysisRow[];
+}
+
+export interface CandleAnalysisResponse {
+  generated_at: string | null;
+  spy_date_range: { from: string; to: string } | null;
+  spy_total_days: number | null;
+  regimes: Record<string, CandleAnalysisRegime>;
+  thresholds: Record<string, { direction: string; min_streak: number }> | null;
+}
+
+export function getCandleAnalysis(): Promise<CandleAnalysisResponse> {
+  return apiFetch("/v1/options/candle-analysis");
+}
