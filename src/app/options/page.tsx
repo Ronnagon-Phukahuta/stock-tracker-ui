@@ -105,8 +105,8 @@ export default async function OptionsPage() {
 
   const tickers = signal?.tickers ?? [];
   const total = tickers.length;
-  const call_count = tickers.filter(t => (t.suggested_action ?? t.action).toUpperCase() === "CALL").length;
-  const put_count  = tickers.filter(t => (t.suggested_action ?? t.action).toUpperCase() === "PUT").length;
+  const call_count = tickers.filter(t => t.action.toUpperCase() === "CALL").length;
+  const put_count  = tickers.filter(t => t.action.toUpperCase() === "PUT").length;
   const signal_action = call_count > 0 ? "CALL" : put_count > 0 ? "PUT" : "NO_TRADE";
   const signal_bias   = call_count > 0 ? `${call_count}/${total}` : put_count > 0 ? `${put_count}/${total}` : `0/${total}`;
 

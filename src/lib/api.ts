@@ -625,7 +625,6 @@ export function getOptionsTrades(): Promise<ListResponse<OptionsTrade>> {
 export interface OptionsSignalTicker {
   ticker: string;
   action: string;
-  suggested_action: string | null;
   signal_strength: string | null;
   gate_reason: string | null;
   within_budget: boolean | null;

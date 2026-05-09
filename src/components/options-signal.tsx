@@ -120,20 +120,20 @@ function TickerCard({ t, nextTradingDay }: { t: OptionsSignalTicker; nextTrading
               <Badge
                 variant="outline"
                 className={`text-sm font-bold px-3 py-1 whitespace-nowrap ${
-                  (t.suggested_action ?? t.action).toUpperCase() === "CALL"
+                  t.action.toUpperCase() === "CALL"
                     ? "bg-emerald-500/25 text-emerald-300 border-emerald-500/50"
-                    : (t.suggested_action ?? t.action).toUpperCase() === "PUT"
+                    : t.action.toUpperCase() === "PUT"
                       ? "bg-red-500/25 text-red-300 border-red-500/50"
-                      : (t.suggested_action ?? t.action).toUpperCase() === "WAIT"
+                      : t.action.toUpperCase() === "WAIT"
                         ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
                         : "bg-zinc-500/20 text-zinc-400 border-zinc-600/40"
                 }`}
               >
-                {(t.suggested_action ?? t.action).toUpperCase() === "CALL"
+                {t.action.toUpperCase() === "CALL"
                   ? "CALL ✓"
-                  : (t.suggested_action ?? t.action).toUpperCase() === "PUT"
+                  : t.action.toUpperCase() === "PUT"
                     ? "PUT ✓"
-                    : t.suggested_action ?? t.action}
+                    : t.action}
               </Badge>
             </div>
           )}
@@ -177,14 +177,9 @@ function TickerCard({ t, nextTradingDay }: { t: OptionsSignalTicker; nextTrading
 
         {/* Regime + gate reason */}
         <div className="pt-3 space-y-2">
-          {(t.regime_label || t.suggested_action) && (
+          {t.regime_label && (
             <div className="flex items-center gap-2 flex-wrap">
-              {t.regime_label && (
-                <span className="text-[10px] text-zinc-500">Regime: <span className="text-zinc-300">{t.regime_label}</span></span>
-              )}
-              {t.suggested_action && (
-                <span className="text-[10px] text-zinc-500">Suggested: <span className="text-zinc-300">{t.suggested_action}</span></span>
-              )}
+              <span className="text-[10px] text-zinc-500">Regime: <span className="text-zinc-300">{t.regime_label}</span></span>
             </div>
           )}
 
