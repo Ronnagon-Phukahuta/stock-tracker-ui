@@ -643,6 +643,17 @@ export interface OptionsSignalTicker {
   stop_loss_pct: number | null;
   candle_direction: string | null;
   candle_streak_days: number | null;
+  mining_signals_active?: boolean | null;
+  mining_skip_reason?: string | null;
+  mining_recommended_ticker?: string | null;
+  mining_edge_reason?: string | null;
+  wf_consistent?: boolean | null;
+  wf_cycle_note?: string | null;
+  exit_advice?: string | null;
+  exit_urgency?: string | null;
+  rotation_signal?: string | null;
+  rotation_target?: string | null;
+  rotation_urgency?: string | null;
 }
 
 export interface OptionsSignalResponse {
@@ -665,6 +676,12 @@ export function getOptionsSignal(): Promise<OptionsSignalResponse> {
 // Candle Analysis
 // ---------------------------------------------------------------------------
 
+export interface WfFold {
+  year: number;
+  reversal_pct_test: number | null;
+  obs_test: number;
+}
+
 export interface CandleAnalysisRow {
   n: number;
   direction: string;
@@ -674,11 +691,39 @@ export interface CandleAnalysisRow {
   fwd3_pct: number;
   fwd7_pct: number;
   is_threshold: boolean;
+  // VIX band breakdown (optional)
+  obs_vix1?: number | null;
+  obs_vix2?: number | null;
+  obs_vix3?: number | null;
+  obs_vix4?: number | null;
+  reversal_pct_vix1?: number | null;
+  reversal_pct_vix2?: number | null;
+  reversal_pct_vix3?: number | null;
+  reversal_pct_vix4?: number | null;
+  // Walk-forward validation (optional)
+  wf_consistent?: boolean | null;
+  wf_folds?: WfFold[] | null;
+  // Exit timing (optional)
+  optimal_exit_day?: string | number | null;
+  fwd1_pct_positive?: number | null;
+  fwd3_pct_positive?: number | null;
+  fwd7_pct_positive?: number | null;
+}
+
+export interface CandleAnalysisTickerBlock {
+  rows?: CandleAnalysisRow[] | null;
+  regimes?: Record<string, { rows: CandleAnalysisRow[] }> | null;
 }
 
 export interface CandleAnalysisRegime {
   total_days: number;
   rows: CandleAnalysisRow[];
+  tickers?: Record<string, CandleAnalysisTickerBlock> | null;
+}
+
+export interface TransitionRisk {
+  alert: string;
+  probability: number;
 }
 
 export interface CandleAnalysisResponse {
@@ -687,6 +732,10 @@ export interface CandleAnalysisResponse {
   spy_total_days: number | null;
   regimes: Record<string, CandleAnalysisRegime>;
   thresholds: Record<string, { direction: string; min_streak: number }> | null;
+  tickers?: Record<string, CandleAnalysisTickerBlock> | null;
+  current_vix?: number | null;
+  current_vix_band?: string | null;
+  transition_risk?: TransitionRisk | null;
 }
 
 export function getCandleAnalysis(): Promise<CandleAnalysisResponse> {

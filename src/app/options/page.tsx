@@ -233,7 +233,12 @@ export default async function OptionsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4">
-                <OptionsSignalDisplay tickers={signal.tickers} nextTradingDay={nextTradingDay} />
+                <OptionsSignalDisplay
+                  tickers={signal.tickers}
+                  nextTradingDay={nextTradingDay}
+                  marketStructure={signal.market_structure}
+                  vixLabel={signal.vix_label}
+                />
               </CardContent>
             </Card>
           </>

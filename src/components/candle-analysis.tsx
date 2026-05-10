@@ -1,4 +1,5 @@
-import { getCandleAnalysis, CandleAnalysisRow } from "@/lib/api";
+import { Fragment } from "react";
+import { getCandleAnalysis, CandleAnalysisRow, CandleAnalysisTickerBlock } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -134,7 +135,15 @@ const TIER_ICON: Record<PlaybookTier, string> = {
   red:     "🔴",
 };
 
-function PlaybookCard({ name, isCurrent }: { name: string; isCurrent: boolean }) {
+function PlaybookCard({
+  name,
+  isCurrent,
+  thresholdRow,
+}: {
+  name: string;
+  isCurrent: boolean;
+  thresholdRow?: CandleAnalysisRow | null;
+}) {
   const style = REGIME_STYLE[name] ?? {
     accent: "border-t-zinc-600/60",
     titleColor: "text-zinc-300",
@@ -142,6 +151,18 @@ function PlaybookCard({ name, isCurrent }: { name: string; isCurrent: boolean })
     desc: "",
   };
   const rules = PLAYBOOK[name] ?? [];
+
+  // Build live stats string from threshold row when available
+  function liveStats(row: CandleAnalysisRow): string {
+    const reversal = row.reversal_pct.toFixed(0);
+    const optDay = String(row.optimal_exit_day ?? "").toLowerCase().trim();
+    let days = "7";
+    let fwdPct: number | null = row.fwd7_pct;
+    if (["1", "day1", "fwd1", "d1"].includes(optDay)) { days = "1"; fwdPct = row.fwd1_pct; }
+    else if (["3", "day3", "fwd3", "d3"].includes(optDay)) { days = "3"; fwdPct = row.fwd3_pct; }
+    const avgStr = fwdPct != null ? (fwdPct >= 0 ? "+" : "") + fwdPct.toFixed(2) + "%" : "—";
+    return `${reversal}% bounce · ${avgStr} avg · exit day ${days}`;
+  }
 
   return (
     <Card className={`bg-zinc-900/50 border-zinc-800/80 border-t-2 ${style.accent}`}>
@@ -168,7 +189,9 @@ function PlaybookCard({ name, isCurrent }: { name: string; isCurrent: boolean })
               {TIER_ICON[rule.tier]} {rule.condition}
             </p>
             <p className={`text-sm ${TIER_ACTION[rule.tier]}`}>{rule.action}</p>
-            <p className="text-[10px] text-zinc-500 mt-0.5">{rule.stats}</p>
+            <p className="text-[10px] text-zinc-500 mt-0.5">
+              {rule.tier === "green" && thresholdRow ? liveStats(thresholdRow) : rule.stats}
+            </p>
           </div>
         ))}
       </CardContent>
@@ -177,16 +200,66 @@ function PlaybookCard({ name, isCurrent }: { name: string; isCurrent: boolean })
 }
 
 // ---------------------------------------------------------------------------
+// Market Context Bar
+// ---------------------------------------------------------------------------
+
+function MarketContextBar({
+  currentVix,
+  currentVixBand,
+  transitionRisk,
+}: {
+  currentVix?: number | null;
+  currentVixBand?: string | null;
+  transitionRisk?: { alert: string; probability: number } | null;
+}) {
+  const alert = transitionRisk?.alert?.toUpperCase();
+  const riskCls =
+    alert === "HIGH"
+      ? "text-red-400"
+      : alert === "ELEVATED"
+        ? "text-amber-400"
+        : "text-emerald-400";
+
+  return (
+    <Card className="bg-zinc-900/50 border-zinc-800/80">
+      <CardContent className="py-3 px-4">
+        <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Current Market Context</p>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+          {currentVix != null && (
+            <span className="text-sm text-zinc-200 tabular-nums">
+              VIX {currentVix.toFixed(2)}
+              {currentVixBand && (
+                <span className="text-zinc-500 ml-1.5">· {currentVixBand}</span>
+              )}
+            </span>
+          )}
+          {transitionRisk && (
+            <span className={`text-sm font-medium ${riskCls}`}>
+              Regime Shift Risk:{" "}
+              <span className="font-bold">{transitionRisk.alert}</span>{" "}
+              {(transitionRisk.probability * 100).toFixed(1)}%
+            </span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Regime card (statistical details)
+// ---------------------------------------------------------------------------
 
 function RegimeCard({
   name,
   totalDays,
   rows,
+  tickers,
 }: {
   name: string;
   totalDays: number;
   rows: CandleAnalysisRow[];
+  tickers?: Record<string, CandleAnalysisTickerBlock> | null;
 }) {
   const style = REGIME_STYLE[name] ?? {
     accent: "border-t-zinc-600/60",
@@ -194,6 +267,9 @@ function RegimeCard({
     badgeCls: "bg-zinc-500/20 text-zinc-400 border-zinc-600/40",
     desc: "",
   };
+
+  const spyRows = tickers?.SPY?.rows ?? rows;
+  const qqqRows = tickers?.QQQ?.rows ?? null;
 
   return (
     <Card className={`bg-zinc-900/50 border-zinc-800/80 border-t-2 ${style.accent}`}>
@@ -235,62 +311,146 @@ function RegimeCard({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((row) => {
+            {spyRows.map((row) => {
               const action = getAction(name, row);
+              const qqqRow =
+                qqqRows?.find((r) => r.n === row.n && r.direction === row.direction) ?? null;
               return (
-                <TableRow
-                  key={`${row.n}-${row.direction}`}
-                  className={
-                    row.is_threshold
-                      ? "border-l-2 border-l-emerald-500/70 bg-emerald-500/5 border-zinc-800/40 hover:bg-emerald-500/10"
-                      : "border-zinc-800/40 hover:bg-zinc-800/30"
-                  }
-                >
-                  <TableCell className="text-sm font-semibold tabular-nums text-zinc-200 pl-4">
-                    {row.n}
-                  </TableCell>
-                  <TableCell
-                    className={`text-xs font-medium ${
-                      row.direction.toUpperCase() === "DOWN" ? "text-red-400" : "text-emerald-400"
-                    }`}
+                <Fragment key={`${row.n}-${row.direction}`}>
+                  <TableRow
+                    className={
+                      row.is_threshold
+                        ? "border-l-2 border-l-emerald-500/70 bg-emerald-500/5 border-zinc-800/40 hover:bg-emerald-500/10"
+                        : "border-zinc-800/40 hover:bg-zinc-800/30"
+                    }
                   >
-                    {row.direction}
-                  </TableCell>
-                  <TableCell className="text-xs tabular-nums text-zinc-500 text-right">{row.obs}</TableCell>
-                  <TableCell className={`text-xs tabular-nums text-right ${reversalColor(row.reversal_pct)}`}>
-                    {row.reversal_pct.toFixed(1)}%
-                  </TableCell>
-                  <TableCell className="text-xs tabular-nums text-zinc-300 text-right">{fmtPct(row.fwd1_pct)}</TableCell>
-                  <TableCell className="text-xs tabular-nums text-zinc-300 text-right">{fmtPct(row.fwd3_pct)}</TableCell>
-                  <TableCell className="text-xs tabular-nums text-zinc-300 text-right">
-                    <span className="flex items-center justify-end gap-1.5">
-                      {fmtPct(row.fwd7_pct)}
-                      {row.is_threshold && (
+                    <TableCell className="text-sm font-semibold tabular-nums text-zinc-200 pl-4">
+                      {row.n}
+                    </TableCell>
+                    <TableCell
+                      className={`text-xs font-medium ${
+                        row.direction.toUpperCase() === "DOWN" ? "text-red-400" : "text-emerald-400"
+                      }`}
+                    >
+                      {row.direction}
+                    </TableCell>
+                    <TableCell className="text-xs tabular-nums text-zinc-500 text-right">{row.obs}</TableCell>
+                    <TableCell className={`text-xs tabular-nums text-right ${reversalColor(row.reversal_pct)}`}>
+                      {row.reversal_pct.toFixed(1)}%
+                    </TableCell>
+                    <TableCell className="text-xs tabular-nums text-zinc-300 text-right">{fmtPct(row.fwd1_pct)}</TableCell>
+                    <TableCell className="text-xs tabular-nums text-zinc-300 text-right">{fmtPct(row.fwd3_pct)}</TableCell>
+                    <TableCell className="text-xs tabular-nums text-zinc-300 text-right">
+                      <span className="flex items-center justify-end gap-1.5">
+                        {fmtPct(row.fwd7_pct)}
+                        {row.is_threshold && (
+                          <Badge
+                            variant="outline"
+                            className="bg-emerald-500/20 text-emerald-300 border-emerald-500/50 text-[9px] font-semibold whitespace-nowrap"
+                          >
+                            ✓ fires tomorrow
+                          </Badge>
+                        )}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right pr-4">
+                      {action ? (
                         <Badge
                           variant="outline"
-                          className="bg-emerald-500/20 text-emerald-300 border-emerald-500/50 text-[9px] font-semibold whitespace-nowrap"
+                          className={`${action.cls} text-[9px] font-semibold whitespace-nowrap`}
                         >
-                          ✓ fires tomorrow
+                          {action.label}
                         </Badge>
+                      ) : (
+                        <span className="text-[10px] text-zinc-700">—</span>
                       )}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right pr-4">
-                    {action ? (
-                      <Badge
-                        variant="outline"
-                        className={`${action.cls} text-[9px] font-semibold whitespace-nowrap`}
-                      >
-                        {action.label}
-                      </Badge>
-                    ) : (
-                      <span className="text-[10px] text-zinc-700">—</span>
-                    )}
-                  </TableCell>
-                </TableRow>
+                    </TableCell>
+                  </TableRow>
+                  {row.is_threshold && (qqqRow != null || (row.wf_folds?.length ?? 0) > 0) ? (
+                    <TableRow className="border-0 hover:bg-transparent">
+                      <TableCell colSpan={8} className="py-3 px-4 bg-zinc-950/60">
+                        <div className="flex flex-col gap-3">
+                          {/* SPY vs QQQ comparison */}
+                          {qqqRow && (
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1">SPY</p>
+                                <p className="text-xs tabular-nums text-zinc-300">
+                                  {row.obs} obs ·{" "}
+                                  <span className={reversalColor(row.reversal_pct)}>
+                                    {row.reversal_pct.toFixed(1)}%
+                                  </span>
+                                </p>
+                                <p className="text-[10px] tabular-nums text-zinc-500 mt-0.5">
+                                  {fmtPct(row.fwd1_pct)} / {fmtPct(row.fwd3_pct)} / {fmtPct(row.fwd7_pct)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1">QQQ</p>
+                                <p className="text-xs tabular-nums text-zinc-300">
+                                  {qqqRow.obs} obs ·{" "}
+                                  <span className={reversalColor(qqqRow.reversal_pct)}>
+                                    {qqqRow.reversal_pct.toFixed(1)}%
+                                  </span>
+                                </p>
+                                <p className="text-[10px] tabular-nums text-zinc-500 mt-0.5">
+                                  {fmtPct(qqqRow.fwd1_pct)} / {fmtPct(qqqRow.fwd3_pct)} / {fmtPct(qqqRow.fwd7_pct)}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                          {/* Walk-forward validation */}
+                          {row.wf_folds && row.wf_folds.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <p className="text-[9px] text-zinc-500 uppercase tracking-widest">
+                                  Walk-Forward
+                                </p>
+                                {row.wf_consistent != null && (
+                                  <Badge
+                                    variant="outline"
+                                    className={
+                                      row.wf_consistent
+                                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[9px]"
+                                        : "bg-amber-500/20 text-amber-300 border-amber-500/40 text-[9px]"
+                                    }
+                                  >
+                                    {row.wf_consistent ? "✓ Consistent" : "~ Mixed"}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex gap-1.5 mb-1.5">
+                                {row.wf_folds.map((fold, i) => (
+                                  <span
+                                    key={i}
+                                    className={`w-2.5 h-2.5 rounded-full inline-block ${
+                                      fold.obs_test < 10
+                                        ? "bg-zinc-600"
+                                        : (fold.reversal_pct_test ?? 0) > 52
+                                          ? "bg-emerald-400"
+                                          : "bg-red-400"
+                                    }`}
+                                    title={`${fold.year}: ${fold.reversal_pct_test != null ? fold.reversal_pct_test.toFixed(1) : "—"}% (n=${fold.obs_test})`}
+                                  />
+                                ))}
+                              </div>
+                              <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                                {row.wf_folds.map((fold, i) => (
+                                  <span key={i} className="text-[9px] text-zinc-500 tabular-nums">
+                                    {fold.year}: {fold.reversal_pct_test != null ? fold.reversal_pct_test.toFixed(1) : "—"}% (n={fold.obs_test})
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
               );
             })}
-            {rows.length === 0 && (
+            {spyRows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={8} className="text-center text-xs text-zinc-500 py-4">
                   No data
@@ -299,6 +459,99 @@ function RegimeCard({
             )}
           </TableBody>
         </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Exit Timing Guide card
+// ---------------------------------------------------------------------------
+
+const EXIT_DAYS: Array<{ key: string; aliases: string[]; label: string; fwdKey: keyof CandleAnalysisRow; posKey: keyof CandleAnalysisRow }> = [
+  { key: "fwd1", aliases: ["1", "day1", "fwd1", "d1"],  label: "Day 1", fwdKey: "fwd1_pct", posKey: "fwd1_pct_positive" },
+  { key: "fwd3", aliases: ["3", "day3", "fwd3", "d3"],  label: "Day 3", fwdKey: "fwd3_pct", posKey: "fwd3_pct_positive" },
+  { key: "fwd7", aliases: ["7", "day7", "fwd7", "d7"],  label: "Day 7", fwdKey: "fwd7_pct", posKey: "fwd7_pct_positive" },
+];
+
+function ExitTimingCard({
+  name,
+  rows,
+  tickers,
+}: {
+  name: string;
+  rows: CandleAnalysisRow[];
+  tickers?: Record<string, CandleAnalysisTickerBlock> | null;
+}) {
+  const style = REGIME_STYLE[name] ?? {
+    accent: "border-t-zinc-600/60",
+    titleColor: "text-zinc-300",
+    badgeCls: "bg-zinc-500/20 text-zinc-400 border-zinc-600/40",
+    desc: "",
+  };
+
+  const spyRows = (tickers?.SPY?.regimes?.[name]?.rows ?? tickers?.SPY?.rows ?? rows) as CandleAnalysisRow[];
+  const qqqRows = (tickers?.QQQ?.regimes?.[name]?.rows ?? tickers?.QQQ?.rows ?? null) as CandleAnalysisRow[] | null;
+
+  const spyThreshold = spyRows.find((r) => r.is_threshold) ?? null;
+  const qqqThreshold = qqqRows?.find((r) => r.is_threshold) ?? null;
+
+  if (!spyThreshold) return null;
+
+  function DayColumns({ row, label }: { row: CandleAnalysisRow; label: string }) {
+    const optimal = String(row.optimal_exit_day ?? "").toLowerCase().trim();
+    return (
+      <div>
+        <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">{label}</p>
+        <div className="flex gap-2">
+          {EXIT_DAYS.map(({ aliases, label: dayLabel, fwdKey, posKey }) => {
+            const isOptimal = optimal !== "" && aliases.includes(optimal);
+            const avgVal = row[fwdKey] as number | null | undefined;
+            const posVal = row[posKey] as number | null | undefined;
+            return (
+              <div
+                key={dayLabel}
+                className={`flex-1 rounded px-2 py-2 text-center border ${
+                  isOptimal
+                    ? "border-emerald-500/60 bg-green-900/50"
+                    : "border-zinc-800/40 bg-transparent"
+                }`}
+              >
+                <p className={`text-[9px] font-semibold uppercase tracking-wider mb-1.5 ${isOptimal ? "text-emerald-300" : "text-zinc-600"}`}>
+                  {dayLabel}
+                </p>
+                <p className={`text-sm font-bold tabular-nums ${isOptimal ? "text-emerald-300" : "text-zinc-500"}`}>
+                  {avgVal != null ? (avgVal >= 0 ? "+" : "") + avgVal.toFixed(2) + "%" : "—"}
+                </p>
+                <p className={`text-[9px] tabular-nums mt-0.5 ${isOptimal ? "text-emerald-400/70" : "text-zinc-500"}`}>
+                  {posVal != null ? posVal.toFixed(0) + "% positive" : ""}
+                </p>
+                {isOptimal && (
+                  <p className="text-[9px] font-semibold text-emerald-400 mt-1.5">★ Best exit</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Card className={`bg-zinc-900/50 border-zinc-800/80 border-t-2 ${style.accent}`}>
+      <CardHeader className="border-b border-zinc-800/60 pb-3 pt-4 px-4">
+        <div className="flex items-center justify-between">
+          <CardTitle className={`text-sm font-bold tracking-wide ${style.titleColor}`}>
+            {name}
+          </CardTitle>
+          <span className="text-[9px] text-zinc-500">
+            {spyThreshold.direction.toUpperCase()} {spyThreshold.n}d streak
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="px-4 pt-3 pb-4 space-y-3">
+        <DayColumns row={spyThreshold} label="SPY" />
+        {qqqThreshold && <DayColumns row={qqqThreshold} label="QQQ" />}
       </CardContent>
     </Card>
   );
@@ -373,22 +626,59 @@ export async function CandleAnalysis({ marketStructure }: { marketStructure?: st
         </CardContent>
       </Card>
 
+      {/* Current Market Context */}
+      {(data?.current_vix != null || data?.transition_risk) && (
+        <MarketContextBar
+          currentVix={data?.current_vix}
+          currentVixBand={data?.current_vix_band}
+          transitionRisk={data?.transition_risk}
+        />
+      )}
+
       {/* Playbook — primary view */}
       <div>
         <p className="text-[10px] font-semibold tracking-[0.2em] text-zinc-400 uppercase mb-3">Playbook</p>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {REGIME_ORDER.map((key) => (
-            <PlaybookCard
-              key={key}
-              name={key}
-              isCurrent={
-                !!marketStructure &&
-                marketStructure.toLowerCase().includes(key.toLowerCase())
-              }
-            />
-          ))}
+          {REGIME_ORDER.map((key) => {
+            const regimeData = data?.regimes[key];
+            const spyRows = regimeData?.tickers?.SPY?.rows ?? regimeData?.rows ?? [];
+            const thresholdRow = spyRows.find((r) => r.is_threshold) ?? null;
+            return (
+              <PlaybookCard
+                key={key}
+                name={key}
+                isCurrent={
+                  !!marketStructure &&
+                  marketStructure.toLowerCase().includes(key.toLowerCase())
+                }
+                thresholdRow={thresholdRow}
+              />
+            );
+          })}
         </div>
       </div>
+
+      {/* Statistical Details — collapsible */}
+      {data !== null && (
+        <div>
+          <p className="text-[10px] font-semibold tracking-[0.2em] text-zinc-400 uppercase mb-3">
+            Exit Timing Guide
+          </p>
+          <p className="text-[10px] text-zinc-500 mb-3">
+            Based on 27yr historical distribution · ★ = statistically optimal exit day
+          </p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {regimeKeys.map((key) => (
+              <ExitTimingCard
+                key={key}
+                name={key}
+                rows={data.regimes[key].rows}
+                tickers={data.tickers}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Statistical Details — collapsible */}
       {data === null ? (
@@ -413,6 +703,7 @@ export async function CandleAnalysis({ marketStructure }: { marketStructure?: st
                   name={key}
                   totalDays={data.regimes[key].total_days}
                   rows={data.regimes[key].rows}
+                  tickers={data.regimes[key].tickers}
                 />
               ))}
             </div>
