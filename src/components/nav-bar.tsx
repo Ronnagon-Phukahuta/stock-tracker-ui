@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { href: "/portfolio", label: "Portfolio" },
   { href: "/rl", label: "RL vs Human" },
   { href: "/options", label: "Options" },
+  { href: "/rotation", label: "Rotation" },
 ];
 
 async function handleLogout() {

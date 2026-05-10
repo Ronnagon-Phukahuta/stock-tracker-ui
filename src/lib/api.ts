@@ -741,3 +741,85 @@ export interface CandleAnalysisResponse {
 export function getCandleAnalysis(): Promise<CandleAnalysisResponse> {
   return apiFetch("/v1/options/candle-analysis");
 }
+
+// ---------------------------------------------------------------------------
+// Rotation / Graph
+// ---------------------------------------------------------------------------
+
+export interface RotationCandidate {
+  ticker_b: string;
+  theme_b: string;
+  correlation_60d: number;
+  rs_rank: number;
+  momentum_score: number;
+  theme_momentum: number;
+  rotation_score: number;
+  lead_lag_days: number;
+}
+
+export function getNextSatellite(params: {
+  from_ticker: string;
+  universe?: "ai_infra" | "tech_sp500";
+  top_n?: number;
+}): Promise<ListResponse<RotationCandidate>> {
+  return apiFetch("/v1/graph/next-satellite", params);
+}
+
+export interface ThemeEdge {
+  theme_a: string;
+  theme_b: string;
+  momentum_flow: number;
+  avg_momentum_a: number;
+  avg_momentum_b: number;
+  correlation?: number;
+  edge_count?: number;
+}
+
+export function getThemeEdges(params?: {
+  universe?: "ai_infra" | "tech_sp500";
+}): Promise<ListResponse<ThemeEdge>> {
+  return apiFetch("/v1/graph/theme-edges", params);
+}
+
+export interface TopTickerByTheme {
+  theme: string;
+  ticker: string;
+  rs_rank: number;
+  momentum_score: number;
+}
+
+export function getTopTickersByTheme(params?: {
+  universe?: string;
+  top_n?: number;
+}): Promise<ListResponse<TopTickerByTheme>> {
+  return apiFetch("/v1/graph/top-tickers-by-theme", params);
+}
+
+export interface ChainNode {
+  id: string;
+  ticker: string;
+  theme: string;
+  rs_rank: number;
+  momentum_score: number;
+  hop: number;
+}
+
+export interface ChainEdge {
+  source: string;
+  target: string;
+  correlation: number;
+  rotation_score: number;
+}
+
+export interface ChainGraph {
+  nodes: ChainNode[];
+  edges: ChainEdge[];
+}
+
+export function getChain(params: {
+  from_ticker: string;
+  depth?: number;
+  universe?: string;
+}): Promise<ChainGraph> {
+  return apiFetch("/v1/graph/chain", params);
+}
