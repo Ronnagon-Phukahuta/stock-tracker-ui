@@ -31,7 +31,7 @@ export default async function RotationPage() {
         satellites.map((p) => getNextSatellite({ from_ticker: p.ticker, top_n: 5 })),
       ),
       getThemeEdges({ universe: "ai_infra" }).catch(() => null),
-      getTopTickersByTheme({ universe: "ai_infra", top_n: 3 }).catch(() => null),
+      getTopTickersByTheme({ universe: "ai_infra", top_n: 50 }).catch(() => null),
       getPrices({ tickers: allTickers, since_date: "2024-07-25" }).catch(() => null),
       getMomentum({ limit: 5000 }).catch(() => null),
     ]);

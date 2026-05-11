@@ -1235,16 +1235,20 @@ function CandidatesTable({
                   key={c.ticker_b}
                   className={
                     idx === 0
-                      ? "border-zinc-800 bg-emerald-950/30"
-                      : "border-zinc-800"
+                      ? "border-b border-zinc-800 border-l-2 border-l-amber-400 bg-amber-950/20"
+                      : "border-zinc-800 opacity-70"
                   }
                 >
-                  <TableCell className="text-zinc-500 text-sm">{idx + 1}</TableCell>
-                  <TableCell className="font-mono text-sm text-zinc-100">
-                    {c.ticker_b}
-                    {idx === 0 && (
-                      <span className="ml-1 text-emerald-400">★</span>
-                    )}
+                  <TableCell className={`text-sm ${idx === 0 ? "text-amber-400 font-semibold" : "text-zinc-500"}`}>{idx + 1}</TableCell>
+                  <TableCell className={`font-mono text-sm font-bold ${idx === 0 ? "text-zinc-50" : "text-zinc-300"}`}>
+                    <span className="flex items-center gap-2">
+                      {c.ticker_b}
+                      {idx === 0 && (
+                        <Badge variant="outline" className="text-xs font-mono bg-amber-500/10 text-amber-300 border-amber-500/40 py-0">
+                          ★ Top Pick
+                        </Badge>
+                      )}
+                    </span>
                   </TableCell>
                   <TableCell>
                     {(() => {
@@ -1475,6 +1479,18 @@ function EntryExitTab({
 
   const themeMap = new Map(topTickersByTheme.map((t) => [t.ticker, t.theme]));
 
+  // Rank map: ranks only ENTRY-signal rows, stable regardless of active filter
+  const entryRankMap = new Map<string, number>(
+    [...data]
+      .filter((s) => s.entry_signal === "ENTRY" && s.entry_score != null)
+      .sort((a, b) => {
+        const scoreDiff = (b.entry_score ?? 0) - (a.entry_score ?? 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        return (b.momentum_delta ?? 0) - (a.momentum_delta ?? 0);
+      })
+      .map((s, i) => [s.ticker, i + 1]),
+  );
+
   const entryRows = [...data]
     .filter((s) => s.entry_score != null)
     .filter((s) => !entryFilter || s.entry_signal === entryFilter)
@@ -1482,7 +1498,9 @@ function EntryExitTab({
       const oa = ENTRY_ORDER[a.entry_signal ?? ""] ?? 99;
       const ob = ENTRY_ORDER[b.entry_signal ?? ""] ?? 99;
       if (oa !== ob) return oa - ob;
-      return (b.entry_score ?? 0) - (a.entry_score ?? 0);
+      const scoreDiff = (b.entry_score ?? 0) - (a.entry_score ?? 0);
+      if (scoreDiff !== 0) return scoreDiff;
+      return (b.momentum_delta ?? 0) - (a.momentum_delta ?? 0);
     });
 
   const exitRows = [...data]
@@ -1506,15 +1524,17 @@ function EntryExitTab({
 
   const ScoreBadge = ({ score, forEntry }: { score: number | undefined; forEntry: boolean }) => {
     if (score == null) return <span className="text-zinc-600 tabular-nums">—</span>;
+    const max = forEntry ? 4.5 : 3.0;
+    const pct = Math.round((score / max) * 100);
     const cls =
-      score >= 3
+      pct >= 90
         ? forEntry ? "text-emerald-300 font-semibold" : "text-red-300 font-semibold"
-        : score >= 2
+        : pct >= 60
           ? forEntry ? "text-emerald-400/80" : "text-orange-300"
-          : score >= 1
+          : pct >= 30
             ? "text-zinc-300"
             : "text-zinc-500";
-    return <span className={`font-mono tabular-nums ${cls}`}>{score}/3</span>;
+    return <span className={`font-mono tabular-nums ${cls}`}>{pct}%</span>;
   };
 
   const FilterBtn = ({
@@ -1558,7 +1578,8 @@ function EntryExitTab({
           <div className="mt-2 rounded-md border border-zinc-800 bg-zinc-950 px-4 py-3 text-xs font-mono text-zinc-400 space-y-3">
             <div>
               <p className="text-zinc-300 font-semibold mb-1">SCORING</p>
-              <p>Score X/3 = number of conditions met (all 3 = strongest signal)</p>
+              <p>Score % = weighted conditions met (100% = all conditions satisfied)</p>
+              <p className="text-zinc-500">Entry max: 4.5 pts (weighted) · Exit max: 3.0 pts (equal weight)</p>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
@@ -1605,6 +1626,7 @@ function EntryExitTab({
             <Table>
               <TableHeader>
                 <TableRow className="border-zinc-800">
+                  <TableHead className="text-zinc-500 text-sm w-8">#</TableHead>
                   <TableHead className="text-zinc-500 text-sm">Ticker</TableHead>
                   <TableHead className="text-zinc-500 text-sm">Signal</TableHead>
                   <TableHead className="text-zinc-500 text-sm">Theme</TableHead>
@@ -1620,14 +1642,21 @@ function EntryExitTab({
               <TableBody>
                 {entryRows.length === 0 ? (
                   <TableRow className="border-zinc-800">
-                    <TableCell colSpan={6} className="text-zinc-600 text-sm font-mono py-4 text-center">
+                    <TableCell colSpan={7} className="text-zinc-600 text-sm font-mono py-4 text-center">
                       No signals match the current filter.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  entryRows.map((s) => (
-                    <TableRow key={s.ticker} className="border-zinc-800">
-                      <TableCell className="font-mono font-bold text-sm text-zinc-100">
+                  entryRows.map((s) => {
+                    const rank = entryRankMap.get(s.ticker);
+                    const isTop = rank === 1;
+                    const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
+                    return (
+                    <TableRow key={s.ticker} className={isTop ? "border-zinc-800 border-l-2 border-l-amber-400 bg-amber-950/20" : "border-zinc-800"}>
+                      <TableCell className="text-sm font-mono w-8 text-center">
+                        {rank != null ? (medal ?? <span className="text-zinc-500">{rank}</span>) : <span className="text-zinc-700">—</span>}
+                      </TableCell>
+                      <TableCell className={`font-mono font-bold text-sm ${isTop ? "text-zinc-50" : "text-zinc-100"}`}>
                         {s.ticker}
                       </TableCell>
                       <TableCell>
@@ -1667,7 +1696,8 @@ function EntryExitTab({
                         {fmtDelta(s.rs_rank_delta)}
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
