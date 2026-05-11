@@ -855,3 +855,36 @@ export async function getEntryExitSignals(
   if (!res.ok) throw new Error(`API error ${res.status} — /api/signal/entry-exit`);
   return res.json() as Promise<EntryExitSignalResponse>;
 }
+
+export interface IcPoint {
+  date: string;
+  horizon: number;
+  ic: number;
+  n_tickers: number;
+}
+
+export async function getIcValidation(): Promise<IcPoint[]> {
+  const res = await fetch("/api/signal/ic-validation");
+  if (!res.ok) throw new Error(`API error ${res.status} — /api/signal/ic-validation`);
+  const json = await res.json() as { items?: IcPoint[] };
+  return json.items ?? [];
+}
+
+export interface BacktestRow {
+  date: string;
+  horizon: number;
+  n_entry: number;
+  n_watch: number;
+  n_wait: number;
+  mean_entry: number;
+  mean_watch: number;
+  mean_wait: number;
+  spread_entry_wait: number | null;
+}
+
+export async function getBacktestResults(): Promise<BacktestRow[]> {
+  const res = await fetch("/api/signal/backtest-results");
+  if (!res.ok) throw new Error(`API error ${res.status} — /api/signal/backtest-results`);
+  const json = await res.json() as { items?: BacktestRow[] };
+  return json.items ?? [];
+}

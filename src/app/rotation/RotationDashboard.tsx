@@ -19,8 +19,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import type { PortfolioPosition, RotationCandidate, ThemeEdge, TopTickerByTheme, ChainGraph, ChainNode, ChainEdge, EntryExitSignal } from "@/lib/api";
-import { getEntryExitSignals } from "@/lib/api";
+import type { PortfolioPosition, RotationCandidate, ThemeEdge, TopTickerByTheme, ChainGraph, ChainNode, ChainEdge, EntryExitSignal, IcPoint, BacktestRow } from "@/lib/api";
+import { getEntryExitSignals, getIcValidation, getBacktestResults } from "@/lib/api";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ReferenceLine,
+  Cell,
+} from "recharts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -1421,6 +1433,211 @@ function RelationshipGraph({
 }
 
 // ---------------------------------------------------------------------------
+// Signal Quality tab
+// ---------------------------------------------------------------------------
+
+function SignalQualityTab({
+  icPoints,
+  backtestRows,
+  loading,
+}: {
+  icPoints: IcPoint[];
+  backtestRows: BacktestRow[];
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="text-zinc-500 text-sm font-mono py-8 text-center">
+        Loading signal quality data…
+      </div>
+    );
+  }
+
+  const safeIcPoints = icPoints ?? [];
+
+  // Pivot long→wide: one row per date with ic_5d and ic_10d columns
+  type IcWidePoint = { date: string; ic_5d: number | null; ic_10d: number | null };
+  const icWideMap = new Map<string, IcWidePoint>();
+  for (const pt of safeIcPoints) {
+    const dateKey = pt.date.slice(0, 10);
+    if (!icWideMap.has(dateKey)) icWideMap.set(dateKey, { date: dateKey, ic_5d: null, ic_10d: null });
+    const row = icWideMap.get(dateKey)!;
+    if (pt.horizon === 5) row.ic_5d = pt.ic;
+    if (pt.horizon === 10) row.ic_10d = pt.ic;
+  }
+  const icWide = Array.from(icWideMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+  // Filter backtest to horizon=5 only, sorted by date
+  const btPoints = (backtestRows ?? [])
+    .filter((r) => r.horizon === 5)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (icWide.length === 0 && btPoints.length === 0) {
+    return (
+      <Card className="bg-zinc-900 border-zinc-800">
+        <CardContent className="p-4 text-zinc-500 text-base">
+          No signal quality data available.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Compute summary stats from horizon=5 rows where n_entry > 0
+  const activeRows = btPoints.filter((r) => r.n_entry > 0 && r.spread_entry_wait != null);
+  const spreads = activeRows.map((r) => r.spread_entry_wait as number);
+  const meanSpread = spreads.length > 0 ? spreads.reduce((a, b) => a + b, 0) / spreads.length : null;
+  const winRate = spreads.length > 0 ? spreads.filter((s) => s > 0).length / spreads.length : null;
+  const sharpe = (() => {
+    if (spreads.length < 2 || meanSpread == null) return null;
+    const variance = spreads.reduce((acc, s) => acc + (s - meanSpread) ** 2, 0) / spreads.length;
+    const std = Math.sqrt(variance);
+    return std === 0 ? null : (meanSpread / std) * Math.sqrt(12);
+  })();
+
+  const fmtPct = (v: number | null) => v != null ? (v * 100).toFixed(1) + "%" : "—";
+  const fmtNum = (v: number | null, dp = 2) => v != null ? v.toFixed(dp) : "—";
+  const shortDate = (d: string) => d.slice(0, 7);
+
+  const ic5dColor = "#34d399";
+  const ic10dColor = "#60a5fa";
+
+  // Bar chart data: use spread_entry_wait if not null, else 0 (gray = no ENTRY signal)
+  const barData = btPoints.map((r) => ({
+    date: r.date,
+    spread: r.spread_entry_wait ?? 0,
+    hasEntry: r.n_entry > 0 && r.spread_entry_wait != null,
+    n_entry: r.n_entry,
+  }));
+
+  const CustomBarTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number; payload: typeof barData[number] }[]; label?: string }) => {
+    if (!active || !payload?.length) return null;
+    const row = payload[0].payload;
+    return (
+      <div className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-xs font-mono text-zinc-200">
+        <p className="text-zinc-400 mb-1">{label}</p>
+        {row.hasEntry ? (
+          <p className={row.spread >= 0 ? "text-emerald-400" : "text-red-400"}>
+            Spread: {row.spread >= 0 ? "+" : ""}{(row.spread * 100).toFixed(2)}%
+          </p>
+        ) : (
+          <p className="text-zinc-500">No ENTRY signals this period</p>
+        )}
+        <p className="text-zinc-400">n_entry: {row.n_entry}</p>
+      </div>
+    );
+  };
+
+  const CustomIcTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-xs font-mono text-zinc-200">
+        <p className="text-zinc-400 mb-1">{label}</p>
+        {payload.map((p) => (
+          <p key={p.name} style={{ color: p.color }}>{p.name}: {p.value.toFixed(3)}</p>
+        ))}
+      </div>
+    );
+  };
+
+  const NEntryLabel = (props: { x?: number; y?: number; width?: number; index?: number }) => {
+    const { x = 0, y = 0, width = 0, index = 0 } = props;
+    const row = barData[index];
+    if (!row || row.n_entry === 0) return null;
+    return (
+      <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={9} fill="#71717a" fontFamily="monospace">
+        {row.n_entry}
+      </text>
+    );
+  };
+
+  const hasSummary = meanSpread != null || winRate != null || sharpe != null;
+
+  return (
+    <div className="space-y-6">
+      {hasSummary && (
+        <div className="grid grid-cols-3 gap-4">
+          <Card className="bg-zinc-900 border-zinc-800">
+            <CardContent className="p-4 text-center">
+              <p className="text-xs font-mono text-zinc-500 mb-1">Mean Spread 5d</p>
+              <p className={`text-2xl font-bold font-mono tabular-nums ${(meanSpread ?? 0) >= 0.005 ? "text-emerald-400" : "text-zinc-300"}`}>
+                {fmtPct(meanSpread)}
+              </p>
+              <p className="text-xs font-mono text-zinc-600 mt-1">{activeRows.length} active periods</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-zinc-900 border-zinc-800">
+            <CardContent className="p-4 text-center">
+              <p className="text-xs font-mono text-zinc-500 mb-1">Sharpe (ann.)</p>
+              <p className={`text-2xl font-bold font-mono tabular-nums ${(sharpe ?? 0) >= 1 ? "text-emerald-400" : (sharpe ?? 0) >= 0 ? "text-zinc-300" : "text-red-400"}`}>
+                {fmtNum(sharpe)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="bg-zinc-900 border-zinc-800">
+            <CardContent className="p-4 text-center">
+              <p className="text-xs font-mono text-zinc-500 mb-1">Win Rate 5d</p>
+              <p className={`text-2xl font-bold font-mono tabular-nums ${(winRate ?? 0) >= 0.55 ? "text-emerald-400" : "text-zinc-300"}`}>
+                {fmtPct(winRate)}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {icWide.length > 0 && (
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-mono text-zinc-300">IC Walk-Forward</CardTitle>
+            <p className="text-xs font-mono text-zinc-500">Information Coefficient over time — higher = better predictive signal</p>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={icWide} margin={{ top: 8, right: 80, bottom: 0, left: 0 }}>
+                <XAxis dataKey="date" tickFormatter={shortDate} tick={{ fontSize: 10, fill: "#71717a", fontFamily: "monospace" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 10, fill: "#71717a", fontFamily: "monospace" }} tickLine={false} axisLine={false} tickFormatter={(v: number) => v.toFixed(2)} width={40} />
+                <Tooltip content={<CustomIcTooltip />} />
+                <ReferenceLine y={0} stroke="#52525b" strokeDasharray="3 3" />
+                <ReferenceLine y={0.05} stroke="#fbbf24" strokeDasharray="4 4" label={{ value: "Acceptable", position: "right", fontSize: 9, fill: "#fbbf24", fontFamily: "monospace" }} />
+                <ReferenceLine y={0.10} stroke="#34d399" strokeDasharray="4 4" label={{ value: "Good", position: "right", fontSize: 9, fill: "#34d399", fontFamily: "monospace" }} />
+                <Line type="monotone" dataKey="ic_5d" name="IC 5d" stroke={ic5dColor} strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="ic_10d" name="IC 10d" stroke={ic10dColor} strokeWidth={1.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+            <div className="flex gap-4 justify-end mt-1">
+              <span className="text-xs font-mono text-zinc-400"><span style={{ color: ic5dColor }}>■</span> IC 5d</span>
+              <span className="text-xs font-mono text-zinc-400"><span style={{ color: ic10dColor }}>■</span> IC 10d</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {barData.length > 0 && (
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-mono text-zinc-300">Backtest Spread per Period (horizon=5d)</CardTitle>
+            <p className="text-xs font-mono text-zinc-500">ENTRY avg return − WAIT avg return · bar label = n_entry · gray = no ENTRY signals</p>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={barData} margin={{ top: 16, right: 16, bottom: 0, left: 0 }}>
+                <XAxis dataKey="date" tickFormatter={shortDate} tick={{ fontSize: 10, fill: "#71717a", fontFamily: "monospace" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 10, fill: "#71717a", fontFamily: "monospace" }} tickLine={false} axisLine={false} tickFormatter={(v: number) => (v * 100).toFixed(1) + "%"} width={48} />
+                <Tooltip content={<CustomBarTooltip />} />
+                <ReferenceLine y={0} stroke="#52525b" />
+                <Bar dataKey="spread" radius={[2, 2, 0, 0]} label={<NEntryLabel />}>
+                  {barData.map((p, i) => (
+                    <Cell key={i} fill={!p.hasEntry ? "#52525b" : p.spread >= 0 ? "#34d399" : "#f87171"} fillOpacity={p.hasEntry ? 0.75 : 0.4} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Entry / Exit Signals tab
 // ---------------------------------------------------------------------------
 
@@ -1837,6 +2054,23 @@ export function RotationDashboard({
       .finally(() => setSignalLoading(false));
   }, []);
 
+  const [icPoints, setIcPoints] = useState<IcPoint[]>([]);
+  const [backtestRows, setBacktestRows] = useState<BacktestRow[]>([]);
+  const [qualityLoading, setQualityLoading] = useState(false);
+
+  useEffect(() => {
+    setQualityLoading(true);
+    Promise.all([getIcValidation(), getBacktestResults()])
+      .then(([ic, bt]) => {
+        setIcPoints(ic ?? []);
+        setBacktestRows(bt ?? []);
+      })
+      .catch((err) => {
+        console.error("[SignalQuality] fetch error:", err);
+      })
+      .finally(() => setQualityLoading(false));
+  }, []);
+
   // Compute median momentum_score across ALL candidates from all satellites
   const allScores: number[] = Object.values(candidatesMap)
     .flat()
@@ -1856,6 +2090,9 @@ export function RotationDashboard({
         </TabsTrigger>
         <TabsTrigger value="signals" className="text-sm font-mono">
           Entry / Exit
+        </TabsTrigger>
+        <TabsTrigger value="quality" className="text-sm font-mono">
+          Signal Quality
         </TabsTrigger>
       </TabsList>
 
@@ -1923,6 +2160,17 @@ export function RotationDashboard({
           date={signalDate}
           loading={signalLoading}
           topTickersByTheme={topTickersByTheme}
+        />
+      </TabsContent>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Tab 4: Signal Quality                                                */}
+      {/* ------------------------------------------------------------------ */}
+      <TabsContent value="quality">
+        <SignalQualityTab
+          icPoints={icPoints}
+          backtestRows={backtestRows}
+          loading={qualityLoading}
         />
       </TabsContent>
     </Tabs>
