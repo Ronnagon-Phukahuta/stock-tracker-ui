@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,7 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import type { PortfolioPosition, RotationCandidate, ThemeEdge, TopTickerByTheme, ChainGraph, ChainNode, ChainEdge } from "@/lib/api";
+import type { PortfolioPosition, RotationCandidate, ThemeEdge, TopTickerByTheme, ChainGraph, ChainNode, ChainEdge, EntryExitSignal } from "@/lib/api";
+import { getEntryExitSignals } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -932,12 +933,14 @@ function PortfolioStatus({
   candidatesMap,
   medianMomentum,
   topTickersByTheme,
+  entryExitData,
 }: {
   positions: PortfolioPosition[];
   portfolioRows: PortfolioRow[];
   candidatesMap: Record<string, RotationCandidate[]>;
   medianMomentum: number;
   topTickersByTheme: TopTickerByTheme[];
+  entryExitData: EntryExitSignal[];
 }) {
   if (positions.length === 0) {
     return (
@@ -951,6 +954,7 @@ function PortfolioStatus({
 
   const rowMap = new Map(portfolioRows.map((r) => [r.ticker, r]));
   const tickerInfoMap = new Map(topTickersByTheme.map((t) => [t.ticker, t]));
+  const exitSignalMap = new Map(entryExitData.map((s) => [s.ticker, s.exit_signal]));
   const portfolioTickers = new Set(positions.map((p) => p.ticker));
   // Best replacement not already in portfolio (for EXIT recommendation)
   const recTicker = topTickersByTheme.find((t) => !portfolioTickers.has(t.ticker));
@@ -1008,20 +1012,29 @@ function PortfolioStatus({
         const pnlPct = row?.pnl_pct ?? null;
         const pnlDollar = row?.pnl_dollar ?? null;
 
-        // Action
-        let action: "core" | "hold" | "watch" | "exit_no_universe" | "exit_profit" | "exit_loss";
+        // Action — priority: P&L thresholds first, then exit_signal from signal data
+        const exitSig = !isCore ? exitSignalMap.get(pos.ticker) : undefined;
+        type ActionType = "core" | "hold" | "hold_watch" | "suggest_exit" | "exit_no_universe" | "exit_15" | "exit_10" | "exit_immediate" | "exit_warn";
+        let action: ActionType;
+        let actionLabel = "";
         if (isCore) {
-          action = "core";
+          action = "core"; actionLabel = "CORE";
         } else if (!inUniverse) {
-          action = "exit_no_universe";
-        } else if (pnlPct !== null && pnlPct > 30) {
-          action = "exit_profit";
-        } else if (pnlPct !== null && pnlPct < -15) {
-          action = "exit_loss";
-        } else if (pnlPct !== null && pnlPct >= 10 && pnlPct <= 30) {
-          action = "watch";
+          action = "exit_no_universe"; actionLabel = "EXIT (no universe)";
+        } else if (pnlPct !== null && pnlPct >= 15) {
+          action = "exit_15"; actionLabel = "EXIT +15%";
+        } else if (pnlPct !== null && pnlPct >= 10 && exitSig !== "HOLD") {
+          action = "exit_10"; actionLabel = "EXIT +10%";
+        } else if (pnlPct !== null && pnlPct >= 10 && exitSig === "HOLD") {
+          action = "suggest_exit"; actionLabel = "SUGGEST EXIT";
+        } else if (exitSig === "EXIT_IMMEDIATE") {
+          action = "exit_immediate"; actionLabel = "EXIT";
+        } else if (exitSig === "EXIT_WARN") {
+          action = "exit_warn"; actionLabel = "EXIT WARN";
+        } else if (exitSig === "HOLD_WATCH") {
+          action = "hold_watch"; actionLabel = "HOLD WATCH";
         } else {
-          action = "hold";
+          action = "hold"; actionLabel = "HOLD";
         }
 
         // Narrative
@@ -1030,15 +1043,14 @@ function PortfolioStatus({
           narrative = "core position — ไม่ rotate, ถือระยะยาว";
         } else if (action === "exit_no_universe") {
           narrative = "ไม่อยู่ใน AI infra universe — พิจารณาสับเปลี่ยนไปยังตัวที่มี rotation edges";
-        } else if (action === "exit_profit") {
-          narrative = `ทำกำไรได้ +${(pnlPct ?? 0).toFixed(1)}% เกิน 30% — ควรออกและ rotate`;
-        } else if (action === "exit_loss") {
-          const recStr = recTicker
-            ? `พิจารณา rotate ไปที่ ${recTicker.ticker} (${recTicker.theme} RS#${recTicker.rs_rank})`
-            : "ไม่มีตัวเลือกทดแทนใน universe";
-          narrative = `ขาดทุน ${(pnlPct ?? 0).toFixed(1)}% เกิน -15% — ตัดขาดทุนและ${recStr}`;
-        } else if (action === "watch") {
-          narrative = "ถึง target zone +10~30% — พิจารณา rotate";
+        } else if (action === "exit_15" || action === "exit_10") {
+          narrative = `ทำกำไรได้ +${(pnlPct ?? 0).toFixed(1)}% — ควรออกและ rotate`;
+        } else if (action === "suggest_exit") {
+          narrative = `P&L +${(pnlPct ?? 0).toFixed(1)}% — signal บอก HOLD แต่ถึง target zone แล้ว พิจารณา rotate`;
+        } else if (action === "exit_immediate" || action === "exit_warn") {
+          narrative = `signal ${exitSig ?? ""} — พิจารณาออกจากตัวนี้`;
+        } else if (action === "hold_watch") {
+          narrative = "signal HOLD_WATCH — จับตาดูใกล้ชิด";
         } else {
           // HOLD
           const rsStr = rsRank !== null ? `RS#${rsRank}` : null;
@@ -1077,14 +1089,24 @@ function PortfolioStatus({
                       HOLD
                     </Badge>
                   )}
-                  {action === "watch" && (
-                    <Badge variant="outline" className="text-xs bg-amber-500/15 text-amber-400 border-amber-500/30">
-                      WATCH
+                  {action === "hold_watch" && (
+                    <Badge variant="outline" className="text-xs bg-amber-400/15 text-amber-300 border-amber-400/30">
+                      HOLD WATCH
                     </Badge>
                   )}
-                  {(action === "exit_no_universe" || action === "exit_profit" || action === "exit_loss") && (
+                  {action === "suggest_exit" && (
+                    <Badge variant="outline" className="text-xs bg-amber-500/15 text-amber-400 border-amber-500/30">
+                      SUGGEST EXIT
+                    </Badge>
+                  )}
+                  {action === "exit_warn" && (
+                    <Badge variant="outline" className="text-xs bg-orange-500/15 text-orange-400 border-orange-500/30">
+                      EXIT WARN
+                    </Badge>
+                  )}
+                  {(action === "exit_15" || action === "exit_10" || action === "exit_immediate" || action === "exit_no_universe") && (
                     <Badge variant="outline" className="text-xs bg-red-500/15 text-red-400 border-red-500/30">
-                      {action === "exit_no_universe" ? "EXIT (no universe)" : action === "exit_profit" ? "EXIT (profit)" : "EXIT (loss)"}
+                      {actionLabel}
                     </Badge>
                   )}
                 </div>
@@ -1141,13 +1163,16 @@ function CandidatesTable({
   candidatesMap,
   selected,
   onSelect,
+  entryExitData,
 }: {
   satellites: PortfolioPosition[];
   candidatesMap: Record<string, RotationCandidate[]>;
   selected: string;
   onSelect: (ticker: string) => void;
+  entryExitData: EntryExitSignal[];
 }) {
   const candidates = (candidatesMap[selected] ?? []).slice(0, 5);
+  const entrySignalMap = new Map(entryExitData.map((s) => [s.ticker, s.entry_signal]));
 
   return (
     <Card className="bg-zinc-900 border-zinc-800">
@@ -1185,9 +1210,10 @@ function CandidatesTable({
               <TableRow className="border-zinc-800">
                 <TableHead className="text-zinc-500 text-sm">#</TableHead>
                 <TableHead className="text-zinc-500 text-sm">Ticker</TableHead>
+                <TableHead className="text-zinc-500 text-sm">Signal</TableHead>
                 <TableHead className="text-zinc-500 text-sm">Theme</TableHead>
                 <TableHead className="text-zinc-500 text-sm text-right">
-                  Corr 60d
+                  Corr W
                 </TableHead>
                 <TableHead className="text-zinc-500 text-sm text-right">
                   RS Rank
@@ -1219,6 +1245,23 @@ function CandidatesTable({
                     {idx === 0 && (
                       <span className="ml-1 text-emerald-400">★</span>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const sig = entrySignalMap.get(c.ticker_b);
+                      if (!sig) return <span className="text-zinc-600 text-xs">—</span>;
+                      const cls =
+                        sig === "ENTRY"
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                          : sig === "WATCH"
+                            ? "bg-amber-400/20 text-amber-300 border-amber-500/40"
+                            : "bg-zinc-500/15 text-zinc-400 border-zinc-600/40";
+                      return (
+                        <Badge variant="outline" className={`text-xs font-mono ${cls}`}>
+                          {sig}
+                        </Badge>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-sm text-zinc-400">
                     {c.theme_b || "—"}
@@ -1374,6 +1417,356 @@ function RelationshipGraph({
 }
 
 // ---------------------------------------------------------------------------
+// Entry / Exit Signals tab
+// ---------------------------------------------------------------------------
+
+function entrySignalClass(signal: string): string {
+  const s = signal.toUpperCase();
+  if (s === "ENTRY") return "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+  if (s === "WATCH") return "bg-amber-400/20 text-amber-300 border-amber-500/40";
+  return "bg-zinc-500/15 text-zinc-400 border-zinc-600/40";
+}
+
+function exitSignalClass(signal: string): string {
+  const s = signal.toUpperCase();
+  if (s === "EXIT_IMMEDIATE") return "bg-red-500/20 text-red-300 border-red-500/40";
+  if (s === "EXIT_WARN") return "bg-orange-500/20 text-orange-300 border-orange-500/40";
+  if (s === "HOLD_WATCH") return "bg-amber-400/20 text-amber-300 border-amber-500/40";
+  if (s === "HOLD") return "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+  return "bg-zinc-500/15 text-zinc-400 border-zinc-600/40";
+}
+
+const ENTRY_ORDER: Record<string, number> = { ENTRY: 0, WATCH: 1, WAIT: 2 };
+const EXIT_ORDER: Record<string, number> = { EXIT_IMMEDIATE: 0, EXIT_WARN: 1, HOLD_WATCH: 2, HOLD: 3 };
+
+function EntryExitTab({
+  data,
+  date,
+  loading,
+  topTickersByTheme,
+}: {
+  data: EntryExitSignal[];
+  date: string | null;
+  loading: boolean;
+  topTickersByTheme: TopTickerByTheme[];
+}) {
+  const [entryFilter, setEntryFilter] = useState<string | null>("ENTRY");
+  // "URGENT" = EXIT_IMMEDIATE + EXIT_WARN combined
+  const [exitFilter, setExitFilter] = useState<string | null>("URGENT");
+  const [showLegend, setShowLegend] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="text-zinc-500 text-sm font-mono py-8 text-center">
+        Loading entry/exit signals…
+      </div>
+    );
+  }
+
+  if (data.length === 0) {
+    return (
+      <Card className="bg-zinc-900 border-zinc-800">
+        <CardContent className="p-4 text-zinc-500 text-base">
+          No entry/exit signal data available.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const themeMap = new Map(topTickersByTheme.map((t) => [t.ticker, t.theme]));
+
+  const entryRows = [...data]
+    .filter((s) => s.entry_score != null)
+    .filter((s) => !entryFilter || s.entry_signal === entryFilter)
+    .sort((a, b) => {
+      const oa = ENTRY_ORDER[a.entry_signal ?? ""] ?? 99;
+      const ob = ENTRY_ORDER[b.entry_signal ?? ""] ?? 99;
+      if (oa !== ob) return oa - ob;
+      return (b.entry_score ?? 0) - (a.entry_score ?? 0);
+    });
+
+  const exitRows = [...data]
+    .filter((s) => s.exit_score != null)
+    .filter((s) => {
+      if (!exitFilter) return true;
+      if (exitFilter === "URGENT") return s.exit_signal === "EXIT_IMMEDIATE" || s.exit_signal === "EXIT_WARN";
+      return s.exit_signal === exitFilter;
+    })
+    .sort((a, b) => {
+      const oa = EXIT_ORDER[a.exit_signal ?? ""] ?? 99;
+      const ob = EXIT_ORDER[b.exit_signal ?? ""] ?? 99;
+      if (oa !== ob) return oa - ob;
+      return (b.exit_score ?? 0) - (a.exit_score ?? 0);
+    });
+
+  const fmtDelta = (v: number | null | undefined) => {
+    if (v == null) return "—";
+    return (v >= 0 ? "+" : "") + v.toFixed(2);
+  };
+
+  const ScoreBadge = ({ score, forEntry }: { score: number | undefined; forEntry: boolean }) => {
+    if (score == null) return <span className="text-zinc-600 tabular-nums">—</span>;
+    const cls =
+      score >= 3
+        ? forEntry ? "text-emerald-300 font-semibold" : "text-red-300 font-semibold"
+        : score >= 2
+          ? forEntry ? "text-emerald-400/80" : "text-orange-300"
+          : score >= 1
+            ? "text-zinc-300"
+            : "text-zinc-500";
+    return <span className={`font-mono tabular-nums ${cls}`}>{score}/3</span>;
+  };
+
+  const FilterBtn = ({
+    label,
+    active,
+    onClick,
+  }: {
+    label: string;
+    active: boolean;
+    onClick: () => void;
+  }) => (
+    <button
+      onClick={onClick}
+      className={`text-xs font-mono px-2 py-0.5 rounded border transition-colors ${
+        active
+          ? "bg-zinc-700 border-zinc-500 text-zinc-100"
+          : "bg-transparent border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="space-y-6">
+      {date && (
+        <p className="text-xs font-mono text-zinc-500">Signal date: {date}</p>
+      )}
+
+      {/* Legend toggle */}
+      <div>
+        <button
+          onClick={() => setShowLegend((v) => !v)}
+          className="text-xs font-mono text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1"
+        >
+          <span>ℹ️ How signals work</span>
+          <span className="text-zinc-600">{showLegend ? "▲" : "▼"}</span>
+        </button>
+
+        {showLegend && (
+          <div className="mt-2 rounded-md border border-zinc-800 bg-zinc-950 px-4 py-3 text-xs font-mono text-zinc-400 space-y-3">
+            <div>
+              <p className="text-zinc-300 font-semibold mb-1">SCORING</p>
+              <p>Score X/3 = number of conditions met (all 3 = strongest signal)</p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <p className="text-emerald-400 font-semibold mb-1">Entry conditions (+1 each)</p>
+                <ul className="space-y-0.5 text-zinc-400">
+                  <li><span className="text-zinc-300">Momentum Trend &gt; 0</span> — momentum accelerating vs 5-day average</li>
+                  <li><span className="text-zinc-300">RS Rank Change &lt; 0</span> — rank number improved (lower = better rank)</li>
+                  <li><span className="text-zinc-300">RS Score rising</span> — relative strength score increasing</li>
+                </ul>
+              </div>
+              <div>
+                <p className="text-red-400 font-semibold mb-1">Exit conditions (+1 each)</p>
+                <ul className="space-y-0.5 text-zinc-400">
+                  <li><span className="text-zinc-300">Momentum Trend &lt; 0</span> — momentum decelerating vs 5-day average</li>
+                  <li><span className="text-zinc-300">RS Rank Change &gt; 3</span> — rank worsened by more than 3 positions</li>
+                  <li><span className="text-zinc-300">Momentum negative</span> — absolute momentum below zero</li>
+                </ul>
+              </div>
+            </div>
+            <div className="border-t border-zinc-800 pt-2">
+              <p className="text-zinc-300 font-semibold mb-1">RS RANK CHANGE</p>
+              <p><span className="text-emerald-400">Negative (−140)</span> = rank improved by 140 positions = GOOD</p>
+              <p><span className="text-red-400">Positive (+77)</span>&nbsp;&nbsp;= rank worsened by 77 positions&nbsp;&nbsp;= BAD</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Entry Signals */}
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="pb-2 space-y-2">
+            <CardTitle className="text-base font-mono text-zinc-300">
+              Entry Signals
+            </CardTitle>
+            <div className="flex flex-wrap gap-1">
+              <FilterBtn label="All" active={entryFilter === null} onClick={() => setEntryFilter(null)} />
+              <FilterBtn label="ENTRY" active={entryFilter === "ENTRY"} onClick={() => setEntryFilter("ENTRY")} />
+              <FilterBtn label="WATCH" active={entryFilter === "WATCH"} onClick={() => setEntryFilter("WATCH")} />
+              <FilterBtn label="WAIT" active={entryFilter === "WAIT"} onClick={() => setEntryFilter("WAIT")} />
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-zinc-800">
+                  <TableHead className="text-zinc-500 text-sm">Ticker</TableHead>
+                  <TableHead className="text-zinc-500 text-sm">Signal</TableHead>
+                  <TableHead className="text-zinc-500 text-sm">Theme</TableHead>
+                  <TableHead className="text-zinc-500 text-sm text-right">Score</TableHead>
+                  <TableHead className="text-zinc-500 text-sm text-right" title="momentum now vs 5-day avg">
+                    Momentum Trend
+                  </TableHead>
+                  <TableHead className="text-zinc-500 text-sm text-right" title="rank improvement, negative = better">
+                    RS Rank Change
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {entryRows.length === 0 ? (
+                  <TableRow className="border-zinc-800">
+                    <TableCell colSpan={6} className="text-zinc-600 text-sm font-mono py-4 text-center">
+                      No signals match the current filter.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  entryRows.map((s) => (
+                    <TableRow key={s.ticker} className="border-zinc-800">
+                      <TableCell className="font-mono font-bold text-sm text-zinc-100">
+                        {s.ticker}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={`text-xs font-mono ${entrySignalClass(s.entry_signal ?? "")}`}
+                        >
+                          {s.entry_signal ?? "—"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-zinc-400 font-mono">
+                        {themeMap.get(s.ticker) ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-sm text-right">
+                        <ScoreBadge score={s.entry_score} forEntry={true} />
+                      </TableCell>
+                      <TableCell
+                        className={`text-sm text-right tabular-nums font-mono ${
+                          (s.momentum_delta ?? 0) > 0
+                            ? "text-emerald-400"
+                            : (s.momentum_delta ?? 0) < 0
+                              ? "text-red-400"
+                              : "text-zinc-400"
+                        }`}
+                      >
+                        {fmtDelta(s.momentum_delta)}
+                      </TableCell>
+                      <TableCell
+                        className={`text-sm text-right tabular-nums font-mono ${
+                          (s.rs_rank_delta ?? 0) < 0
+                            ? "text-emerald-400"
+                            : (s.rs_rank_delta ?? 0) > 0
+                              ? "text-red-400"
+                              : "text-zinc-400"
+                        }`}
+                      >
+                        {fmtDelta(s.rs_rank_delta)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {/* Exit Signals */}
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="pb-2 space-y-2">
+            <CardTitle className="text-base font-mono text-zinc-300">
+              Exit Signals
+            </CardTitle>
+            <div className="flex flex-wrap gap-1">
+              <FilterBtn label="All" active={exitFilter === null} onClick={() => setExitFilter(null)} />
+              <FilterBtn label="Urgent" active={exitFilter === "URGENT"} onClick={() => setExitFilter("URGENT")} />
+              <FilterBtn label="EXIT_IMMEDIATE" active={exitFilter === "EXIT_IMMEDIATE"} onClick={() => setExitFilter("EXIT_IMMEDIATE")} />
+              <FilterBtn label="EXIT_WARN" active={exitFilter === "EXIT_WARN"} onClick={() => setExitFilter("EXIT_WARN")} />
+              <FilterBtn label="HOLD_WATCH" active={exitFilter === "HOLD_WATCH"} onClick={() => setExitFilter("HOLD_WATCH")} />
+              <FilterBtn label="HOLD" active={exitFilter === "HOLD"} onClick={() => setExitFilter("HOLD")} />
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-zinc-800">
+                  <TableHead className="text-zinc-500 text-sm">Ticker</TableHead>
+                  <TableHead className="text-zinc-500 text-sm">Signal</TableHead>
+                  <TableHead className="text-zinc-500 text-sm">Theme</TableHead>
+                  <TableHead className="text-zinc-500 text-sm text-right">Score</TableHead>
+                  <TableHead className="text-zinc-500 text-sm text-right" title="momentum now vs 5-day avg">
+                    Momentum Trend
+                  </TableHead>
+                  <TableHead className="text-zinc-500 text-sm text-right" title="rank improvement, negative = better">
+                    RS Rank Change
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {exitRows.length === 0 ? (
+                  <TableRow className="border-zinc-800">
+                    <TableCell colSpan={6} className="text-zinc-600 text-sm font-mono py-4 text-center">
+                      No signals match the current filter.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  exitRows.map((s) => (
+                    <TableRow key={s.ticker} className="border-zinc-800">
+                      <TableCell className="font-mono font-bold text-sm text-zinc-100">
+                        {s.ticker}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={`text-xs font-mono ${exitSignalClass(s.exit_signal ?? "")}`}
+                        >
+                          {s.exit_signal ?? "—"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-zinc-400 font-mono">
+                        {themeMap.get(s.ticker) ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-sm text-right">
+                        <ScoreBadge score={s.exit_score} forEntry={false} />
+                      </TableCell>
+                      <TableCell
+                        className={`text-sm text-right tabular-nums font-mono ${
+                          (s.momentum_delta ?? 0) > 0
+                            ? "text-emerald-400"
+                            : (s.momentum_delta ?? 0) < 0
+                              ? "text-red-400"
+                              : "text-zinc-400"
+                        }`}
+                      >
+                        {fmtDelta(s.momentum_delta)}
+                      </TableCell>
+                      <TableCell
+                        className={`text-sm text-right tabular-nums font-mono ${
+                          (s.rs_rank_delta ?? 0) < 0
+                            ? "text-emerald-400"
+                            : (s.rs_rank_delta ?? 0) > 0
+                              ? "text-red-400"
+                              : "text-zinc-400"
+                        }`}
+                      >
+                        {fmtDelta(s.rs_rank_delta)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Root client component
 // ---------------------------------------------------------------------------
 
@@ -1397,6 +1790,23 @@ export function RotationDashboard({
   const [selected, setSelected] = useState(firstWithCandidates);
   const satellites = positions.filter((p) => p.label !== "core");
 
+  const [entryExitData, setEntryExitData] = useState<EntryExitSignal[]>([]);
+  const [signalDate, setSignalDate] = useState<string | null>(null);
+  const [signalLoading, setSignalLoading] = useState(false);
+
+  useEffect(() => {
+    setSignalLoading(true);
+    getEntryExitSignals()
+      .then((res) => {
+        setEntryExitData(res.signals);
+        setSignalDate(res.date);
+      })
+      .catch(() => {
+        // silently ignore — table will show empty state
+      })
+      .finally(() => setSignalLoading(false));
+  }, []);
+
   // Compute median momentum_score across ALL candidates from all satellites
   const allScores: number[] = Object.values(candidatesMap)
     .flat()
@@ -1414,6 +1824,9 @@ export function RotationDashboard({
         <TabsTrigger value="market" className="text-sm font-mono">
           Market Overview
         </TabsTrigger>
+        <TabsTrigger value="signals" className="text-sm font-mono">
+          Entry / Exit
+        </TabsTrigger>
       </TabsList>
 
       {/* ------------------------------------------------------------------ */}
@@ -1427,6 +1840,7 @@ export function RotationDashboard({
             candidatesMap={candidatesMap}
             medianMomentum={medianMomentum}
             topTickersByTheme={topTickersByTheme}
+            entryExitData={entryExitData}
           />
           {satellites.length === 0 ? (
             <Card className="bg-zinc-900 border-zinc-800">
@@ -1441,6 +1855,7 @@ export function RotationDashboard({
                 candidatesMap={candidatesMap}
                 selected={selected}
                 onSelect={setSelected}
+                entryExitData={entryExitData}
               />
               <RelationshipGraph
                 satellite={selected}
@@ -1467,6 +1882,18 @@ export function RotationDashboard({
           <ThemeFlowTable themeEdges={themeEdges} />
           <TopTickersGrid topTickersByTheme={topTickersByTheme} />
         </div>
+      </TabsContent>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Tab 3: Entry / Exit Signals                                          */}
+      {/* ------------------------------------------------------------------ */}
+      <TabsContent value="signals">
+        <EntryExitTab
+          data={entryExitData}
+          date={signalDate}
+          loading={signalLoading}
+          topTickersByTheme={topTickersByTheme}
+        />
       </TabsContent>
     </Tabs>
   );

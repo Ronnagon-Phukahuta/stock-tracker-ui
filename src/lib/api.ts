@@ -823,3 +823,35 @@ export function getChain(params: {
 }): Promise<ChainGraph> {
   return apiFetch("/v1/graph/chain", params);
 }
+
+export interface EntryExitSignal {
+  ticker: string;
+  date: string;
+  computed_at: string;
+  entry_signal?: "ENTRY" | "WATCH" | "WAIT";
+  entry_score?: number;
+  exit_signal?: "EXIT_IMMEDIATE" | "EXIT_WARN" | "HOLD_WATCH" | "HOLD";
+  exit_score?: number;
+  momentum_delta?: number;
+  rs_rank_delta?: number;
+  rs_score_delta?: number;
+  momentum_now?: number;
+}
+
+export interface EntryExitSignalResponse {
+  date: string | null;
+  signals: EntryExitSignal[];
+}
+
+export async function getEntryExitSignals(
+  signalType?: "entry" | "exit",
+  ticker?: string,
+): Promise<EntryExitSignalResponse> {
+  const params = new URLSearchParams();
+  if (signalType) params.set("signal_type", signalType);
+  if (ticker) params.set("ticker", ticker);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`/api/signal/entry-exit${query}`);
+  if (!res.ok) throw new Error(`API error ${res.status} — /api/signal/entry-exit`);
+  return res.json() as Promise<EntryExitSignalResponse>;
+}
