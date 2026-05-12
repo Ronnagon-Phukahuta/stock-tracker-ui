@@ -1026,6 +1026,11 @@ function PortfolioStatus({
 
         // Action — priority: P&L thresholds first, then exit_signal from signal data
         const exitSig = !isCore ? exitSignalMap.get(pos.ticker) : undefined;
+        console.log(`[${pos.ticker}] candidates:`, candidates.length);
+        console.log(`[${pos.ticker}] inUniverse:`, inUniverse);
+        console.log(`[${pos.ticker}] isCore:`, isCore);
+        console.log(`[${pos.ticker}] pnlPct:`, pnlPct);
+        console.log(`[${pos.ticker}] exitSig:`, exitSig);
         type ActionType = "core" | "hold" | "hold_watch" | "suggest_exit" | "exit_no_universe" | "exit_15" | "exit_10" | "exit_immediate" | "exit_warn";
         let action: ActionType;
         let actionLabel = "";

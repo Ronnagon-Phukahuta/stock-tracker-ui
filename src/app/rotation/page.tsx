@@ -22,13 +22,17 @@ export default async function RotationPage() {
   const positions: PortfolioPosition[] = positionsResult?.items ?? [];
 
   const satellites = positions.filter((p) => !CORE_TICKERS.has(p.ticker));
+  console.log("[rotation] satellites:", satellites.map((s) => s.ticker));
 
   const allTickers = positions.map((p) => p.ticker).join(",");
 
   const [candidateResults, themeEdgesResult, topTickersResult, pricesResult, momentumResult] =
     await Promise.all([
       Promise.allSettled(
-        satellites.map((p) => getNextSatellite({ from_ticker: p.ticker, top_n: 5, universe: "ai_infra" })),
+        satellites.map((p) => {
+          console.log("[rotation] calling next-satellite for:", p.ticker);
+          return getNextSatellite({ from_ticker: p.ticker, top_n: 5, universe: "ai_infra" });
+        }),
       ),
       getThemeEdges({ universe: "ai_infra" }).catch(() => null),
       getTopTickersByTheme({ universe: "ai_infra", top_n: 50 }).catch(() => null),
@@ -36,11 +40,13 @@ export default async function RotationPage() {
       getMomentum({ limit: 5000 }).catch(() => null),
     ]);
 
+  console.log("[rotation] candidateResults length:", candidateResults.length);
   const candidatesMap: Record<string, RotationCandidate[]> = {};
   for (let i = 0; i < satellites.length; i++) {
     const result = candidateResults[i];
-    candidatesMap[satellites[i].ticker] =
-      result.status === "fulfilled" ? result.value.items : [];
+    const items = result.status === "fulfilled" ? result.value.items : [];
+    console.log(`[rotation] ${satellites[i].ticker} → status: ${result.status}, items: ${items.length}`);
+    candidatesMap[satellites[i].ticker] = items;
   }
 
   const themeEdges: ThemeEdge[] = themeEdgesResult?.items ?? [];
