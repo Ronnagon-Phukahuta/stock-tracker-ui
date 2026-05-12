@@ -946,6 +946,7 @@ function PortfolioStatus({
   medianMomentum,
   topTickersByTheme,
   entryExitData,
+  signalLoading,
 }: {
   positions: PortfolioPosition[];
   portfolioRows: PortfolioRow[];
@@ -953,6 +954,7 @@ function PortfolioStatus({
   medianMomentum: number;
   topTickersByTheme: TopTickerByTheme[];
   entryExitData: EntryExitSignal[];
+  signalLoading: boolean;
 }) {
   if (positions.length === 0) {
     return (
@@ -1024,13 +1026,28 @@ function PortfolioStatus({
         const pnlPct = row?.pnl_pct ?? null;
         const pnlDollar = row?.pnl_dollar ?? null;
 
+        // While signals are loading, show neutral placeholder for non-core positions
+        if (!isCore && signalLoading) {
+          return (
+            <Card key={pos.ticker} className="bg-zinc-900 border-zinc-800">
+              <CardContent className="p-4 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold font-mono text-zinc-100">{pos.ticker}</span>
+                  <Badge variant="outline" className="text-[10px] bg-zinc-800 text-zinc-500 border-zinc-700">…</Badge>
+                </div>
+                {pnlPct !== null && (
+                  <p className="text-xs font-mono text-zinc-400">
+                    P&amp;L: <span className={pnlPct >= 0 ? "text-emerald-400" : "text-red-400"}>{pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%</span>
+                  </p>
+                )}
+                <p className="text-[11px] text-zinc-600">Loading signal…</p>
+              </CardContent>
+            </Card>
+          );
+        }
+
         // Action — priority: P&L thresholds first, then exit_signal from signal data
         const exitSig = !isCore ? exitSignalMap.get(pos.ticker) : undefined;
-        console.log(`[${pos.ticker}] candidates:`, candidates.length);
-        console.log(`[${pos.ticker}] inUniverse:`, inUniverse);
-        console.log(`[${pos.ticker}] isCore:`, isCore);
-        console.log(`[${pos.ticker}] pnlPct:`, pnlPct);
-        console.log(`[${pos.ticker}] exitSig:`, exitSig);
         type ActionType = "core" | "hold" | "hold_watch" | "suggest_exit" | "exit_no_universe" | "exit_15" | "exit_10" | "exit_immediate" | "exit_warn";
         let action: ActionType;
         let actionLabel = "";
@@ -2113,6 +2130,7 @@ export function RotationDashboard({
             medianMomentum={medianMomentum}
             topTickersByTheme={topTickersByTheme}
             entryExitData={entryExitData}
+            signalLoading={signalLoading}
           />
           {satellites.length === 0 ? (
             <Card className="bg-zinc-900 border-zinc-800">
