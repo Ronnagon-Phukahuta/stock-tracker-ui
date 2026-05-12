@@ -28,7 +28,7 @@ export default async function RotationPage() {
   const [candidateResults, themeEdgesResult, topTickersResult, pricesResult, momentumResult] =
     await Promise.all([
       Promise.allSettled(
-        satellites.map((p) => getNextSatellite({ from_ticker: p.ticker, top_n: 5 })),
+        satellites.map((p) => getNextSatellite({ from_ticker: p.ticker, top_n: 5, universe: "ai_infra" })),
       ),
       getThemeEdges({ universe: "ai_infra" }).catch(() => null),
       getTopTickersByTheme({ universe: "ai_infra", top_n: 50 }).catch(() => null),

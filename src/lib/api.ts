@@ -742,6 +742,13 @@ export interface TodaysPicksResponse {
   regime: "Bull" | "Sideway" | "Bear";
   regime_has_edge: boolean;
   regime_criteria?: { note: string } | null;
+  strategy: {
+    hold_days: number;
+    dte_min: number;
+    dte_max: number;
+    exit_target_pct: string;
+    stop_loss_pct: string;
+  };
 }
 
 export function getTodaysPicks(): Promise<TodaysPicksResponse> {

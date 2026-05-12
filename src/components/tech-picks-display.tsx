@@ -62,7 +62,11 @@ function sizeFactor(vix: number): string {
 // Pick card
 // ---------------------------------------------------------------------------
 
-function PickCard({ pick, regime }: { pick: OptionsPick; regime: string }) {
+function PickCard({ pick, regime, strategy }: {
+  pick: OptionsPick;
+  regime: string;
+  strategy: TodaysPicksResponse["strategy"] | undefined;
+}) {
   const dimmed = regime === "Bull" && pick.action_label === "WATCH";
   return (
     <Card
@@ -120,6 +124,32 @@ function PickCard({ pick, regime }: { pick: OptionsPick; regime: string }) {
           <p>
             <span className="text-zinc-500">Score:</span>{" "}
             <span className="text-slate-300">{pick.pick_score.toFixed(3)}</span>
+          </p>
+        </div>
+
+        {/* Trade guidance */}
+        <div className="border-t border-white/10 mt-2 pt-2 space-y-0.5 text-xs font-mono">
+          <p>
+            <span className="text-slate-400">Buy DTE:</span>{" "}
+            <span className="text-sky-400">
+              {strategy ? `${strategy.dte_min}-${strategy.dte_max} days` : "15-21 days"}
+            </span>
+          </p>
+          <p>
+            <span className="text-slate-400">Hold:</span>{" "}
+            <span className="text-slate-300">
+              {strategy
+                ? `${strategy.hold_days} days after entry`
+                : "3 days after entry"}
+            </span>
+          </p>
+          <p>
+            <span className="text-slate-400">Target:</span>{" "}
+            <span className="text-emerald-400">
+              {strategy
+                ? `+${strategy.exit_target_pct}% or stop at -${strategy.stop_loss_pct}%`
+                : "+20-30% or stop at -15%"}
+            </span>
           </p>
         </div>
 
@@ -271,7 +301,7 @@ export function TechPicksDisplay({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {picks.picks.slice(0, 5).map((pick) => (
-            <PickCard key={pick.ticker} pick={pick} regime={regime ?? ""} />
+            <PickCard key={pick.ticker} pick={pick} regime={regime ?? ""} strategy={picks?.strategy} />
           ))}
         </div>
       )}
