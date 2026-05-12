@@ -3,7 +3,6 @@ export const fetchCache = "force-no-store";
 
 import {
   getPortfolioPositions,
-  getNextSatellite,
   getThemeEdges,
   getTopTickersByTheme,
   getPrices,
@@ -25,11 +24,8 @@ export default async function RotationPage() {
 
   const allTickers = positions.map((p) => p.ticker).join(",");
 
-  const [candidateResults, themeEdgesResult, topTickersResult, pricesResult, momentumResult] =
+  const [themeEdgesResult, topTickersResult, pricesResult, momentumResult] =
     await Promise.all([
-      Promise.allSettled(
-        satellites.map((p) => getNextSatellite({ from_ticker: p.ticker, top_n: 5, universe: "ai_infra" })),
-      ),
       getThemeEdges({ universe: "ai_infra" }).catch(() => null),
       getTopTickersByTheme({ universe: "ai_infra", top_n: 50 }).catch(() => null),
       getPrices({ tickers: allTickers, since_date: "2024-07-25" }).catch(() => null),
@@ -37,11 +33,6 @@ export default async function RotationPage() {
     ]);
 
   const candidatesMap: Record<string, RotationCandidate[]> = {};
-  for (let i = 0; i < satellites.length; i++) {
-    const result = candidateResults[i];
-    candidatesMap[satellites[i].ticker] =
-      result.status === "fulfilled" ? result.value.items : [];
-  }
 
   const themeEdges: ThemeEdge[] = themeEdgesResult?.items ?? [];
   const topTickersByTheme: TopTickerByTheme[] = topTickersResult?.items ?? [];
@@ -127,6 +118,7 @@ export default async function RotationPage() {
       </div>
       <RotationDashboard
         positions={positions}
+        satellites={satellites}
         candidatesMap={candidatesMap}
         themeEdges={themeEdges}
         topTickersByTheme={topTickersByTheme}

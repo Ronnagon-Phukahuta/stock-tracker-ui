@@ -845,7 +845,11 @@ export function getNextSatellite(params: {
   universe?: "ai_infra" | "tech_sp500";
   top_n?: number;
 }): Promise<ListResponse<RotationCandidate>> {
-  return apiFetch("/v1/graph/next-satellite", params);
+  // Use BFF proxy so INTERNAL_API_TOKEN stays server-side (safe for client calls)
+  const qs = new URLSearchParams({ from_ticker: params.from_ticker });
+  if (params.universe) qs.set("universe", params.universe);
+  if (params.top_n !== undefined) qs.set("top_n", String(params.top_n));
+  return fetch(`/api/rotation/next-satellite?${qs}`).then((r) => r.json());
 }
 
 export interface ThemeEdge {

@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { PortfolioPosition, RotationCandidate, ThemeEdge, TopTickerByTheme, ChainGraph, ChainNode, ChainEdge, EntryExitSignal, IcPoint, BacktestRow } from "@/lib/api";
-import { getEntryExitSignals, getIcValidation, getBacktestResults } from "@/lib/api";
+import { getEntryExitSignals, getIcValidation, getBacktestResults, getNextSatellite } from "@/lib/api";
 import {
   ResponsiveContainer,
   LineChart,
@@ -947,6 +947,7 @@ function PortfolioStatus({
   topTickersByTheme,
   entryExitData,
   signalLoading,
+  candidatesLoading,
 }: {
   positions: PortfolioPosition[];
   portfolioRows: PortfolioRow[];
@@ -955,6 +956,7 @@ function PortfolioStatus({
   topTickersByTheme: TopTickerByTheme[];
   entryExitData: EntryExitSignal[];
   signalLoading: boolean;
+  candidatesLoading: boolean;
 }) {
   if (positions.length === 0) {
     return (
@@ -1026,8 +1028,8 @@ function PortfolioStatus({
         const pnlPct = row?.pnl_pct ?? null;
         const pnlDollar = row?.pnl_dollar ?? null;
 
-        // While signals are loading, show neutral placeholder for non-core positions
-        if (!isCore && signalLoading) {
+        // While signals or candidates are loading, show neutral placeholder for non-core positions
+        if (!isCore && (signalLoading || candidatesLoading)) {
           return (
             <Card key={pos.ticker} className="bg-zinc-900 border-zinc-800">
               <CardContent className="p-4 space-y-1.5">
@@ -1053,7 +1055,7 @@ function PortfolioStatus({
         let actionLabel = "";
         if (isCore) {
           action = "core"; actionLabel = "CORE";
-        } else if (!inUniverse) {
+        } else if (!inUniverse && exitSig !== "HOLD" && exitSig !== "HOLD_WATCH") {
           action = "exit_no_universe"; actionLabel = "EXIT (no universe)";
         } else if (pnlPct !== null && pnlPct >= 15) {
           action = "exit_15"; actionLabel = "EXIT +15%";
@@ -2041,17 +2043,46 @@ function EntryExitTab({
 
 export function RotationDashboard({
   positions,
-  candidatesMap,
+  satellites: satellitesProp,
+  candidatesMap: initialCandidatesMap,
   themeEdges,
   topTickersByTheme,
   portfolioRows,
 }: {
   positions: PortfolioPosition[];
+  satellites: PortfolioPosition[];
   candidatesMap: Record<string, RotationCandidate[]>;
   themeEdges: ThemeEdge[];
   topTickersByTheme: TopTickerByTheme[];
   portfolioRows: PortfolioRow[];
 }) {
+  const [candidatesMap, setCandidatesMap] = useState<Record<string, RotationCandidate[]>>(initialCandidatesMap);
+  const [candidatesLoading, setCandidatesLoading] = useState(satellitesProp.length > 0);
+
+  const satelliteKey = satellitesProp.map((s) => s.ticker).join(",");
+  useEffect(() => {
+    if (satellitesProp.length === 0) {
+      setCandidatesLoading(false);
+      return;
+    }
+    setCandidatesLoading(true);
+    Promise.allSettled(
+      satellitesProp.map((p) =>
+        getNextSatellite({ from_ticker: p.ticker, top_n: 5, universe: "ai_infra" })
+      )
+    )
+      .then((results) => {
+        const map: Record<string, RotationCandidate[]> = {};
+        for (let i = 0; i < satellitesProp.length; i++) {
+          const r = results[i];
+          map[satellitesProp[i].ticker] = r.status === "fulfilled" ? r.value.items : [];
+        }
+        setCandidatesMap(map);
+      })
+      .finally(() => setCandidatesLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [satelliteKey]);
+
   const firstWithCandidates =
     positions
       .filter((p) => p.label !== "core")
@@ -2131,6 +2162,7 @@ export function RotationDashboard({
             topTickersByTheme={topTickersByTheme}
             entryExitData={entryExitData}
             signalLoading={signalLoading}
+            candidatesLoading={candidatesLoading}
           />
           {satellites.length === 0 ? (
             <Card className="bg-zinc-900 border-zinc-800">
