@@ -91,11 +91,40 @@ export default async function RotationPage() {
     };
   });
 
+  // Derive latest data date from prices
+  const latestDate =
+    allPrices.length > 0
+      ? allPrices.reduce((max, p) => (p.date > max ? p.date : max), allPrices[0].date)
+      : null;
+
+  const timestamp = new Date().toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+
   return (
     <main className="p-6 space-y-6">
-      <h1 className="text-lg font-semibold font-mono text-zinc-100">
-        Rotation Dashboard
-      </h1>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-lg font-semibold font-mono text-zinc-100">
+            Rotation Dashboard
+          </h1>
+          {latestDate && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {(() => {
+                const [year, month, day] = latestDate.slice(0, 10).split("-").map(Number);
+                const d = new Date(year, month - 1, day);
+                return `Last updated: ${d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+              })()}
+            </p>
+          )}
+        </div>
+        <span className="text-xs text-zinc-400 tabular-nums shrink-0">{timestamp}</span>
+      </div>
       <RotationDashboard
         positions={positions}
         candidatesMap={candidatesMap}

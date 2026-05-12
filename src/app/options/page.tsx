@@ -1,11 +1,12 @@
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-import { getOptionsSignal, getOptionsTrades } from "@/lib/api";
+import { getOptionsSignal, getOptionsTrades, getTodaysPicks } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OptionsSignalDisplay } from "@/components/options-signal";
 import { OptionsTradesManager } from "@/components/options-trades-manager";
+import { TechPicksDisplay } from "@/components/tech-picks-display";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CandleAnalysis } from "@/components/candle-analysis";
 
@@ -86,13 +87,15 @@ function breadthBadge(pct: number | null) {
 // ---------------------------------------------------------------------------
 
 export default async function OptionsPage() {
-  const [signalResult, tradesResult] = await Promise.allSettled([
+  const [signalResult, tradesResult, picksResult] = await Promise.allSettled([
     getOptionsSignal(),
     getOptionsTrades(),
+    getTodaysPicks(),
   ]);
 
   const signal = signalResult.status === "fulfilled" ? signalResult.value : null;
   const trades = tradesResult.status === "fulfilled" ? tradesResult.value.items : [];
+  const picksData = picksResult.status === "fulfilled" ? picksResult.value : null;
 
   const timestamp = new Date().toLocaleString("en-US", {
     month: "short",
@@ -134,6 +137,7 @@ export default async function OptionsPage() {
         <Tabs defaultValue="signal">
           <TabsList className="mb-6 bg-zinc-900 border border-zinc-800">
             <TabsTrigger value="signal" className="font-mono text-xs">Signal</TabsTrigger>
+            <TabsTrigger value="tech-picks" className="font-mono text-xs">Tech Picks</TabsTrigger>
             <TabsTrigger value="analysis" className="font-mono text-xs">Market Analysis</TabsTrigger>
           </TabsList>
 
@@ -260,6 +264,13 @@ export default async function OptionsPage() {
 
           <TabsContent value="analysis">
             <CandleAnalysis marketStructure={signal?.market_structure ?? null} />
+          </TabsContent>
+
+          <TabsContent value="tech-picks">
+            <TechPicksDisplay
+              picks={picksData}
+              signalAction={signal?.action_now ?? "NO_TRADE"}
+            />
           </TabsContent>
         </Tabs>
       </div>

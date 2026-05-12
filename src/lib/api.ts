@@ -673,6 +673,82 @@ export function getOptionsSignal(): Promise<OptionsSignalResponse> {
 }
 
 // ---------------------------------------------------------------------------
+// Options Universe
+// ---------------------------------------------------------------------------
+
+export interface OptionsUniverseItem {
+  ticker: string;
+  liquidity_grade: "A" | "B" | "C" | "F";
+  avg_volume_30d: number;
+  spot_price: number;
+  vix_latest: number;
+  hold_mode: "short_hold" | "long_hold";
+  days_to_earnings: number;
+  earnings_flag: boolean;
+  scan_date: string;
+  regime?: string;
+}
+
+export interface OptionsUniverseSummary {
+  total_scanned: number;
+  grade_a: number;
+  grade_b: number;
+  grade_c: number;
+  grade_f: number;
+  short_hold: number;
+  long_hold: number;
+  earnings_blocked: number;
+  filtered_count: number;
+  filter_note: string;
+  vix_latest: number;
+  scan_date: string;
+}
+
+export interface OptionsUniverseResponse {
+  items: OptionsUniverseItem[];
+  count: number;
+  summary: OptionsUniverseSummary;
+}
+
+export function getOptionsUniverse(
+  minGrade = "B",
+  excludeEarnings = true,
+): Promise<OptionsUniverseResponse> {
+  return apiFetch(
+    `/v1/options/universe?min_grade=${minGrade}&exclude_earnings=${excludeEarnings}`,
+  );
+}
+
+export interface OptionsPick {
+  ticker: string;
+  liquidity_grade: "A" | "B" | "C" | "F";
+  hold_mode: "short_hold" | "long_hold";
+  spot_price: number;
+  liquid_rank: number;
+  rs_rank: number;
+  momentum_score: number;
+  pick_score: number;
+  days_to_earnings: number;
+  earnings_flag: boolean;
+  action_label: "ENTRY" | "WATCH" | "AVOID";
+  reasoning: string;
+  market_override: boolean;
+}
+
+export interface TodaysPicksResponse {
+  picks: OptionsPick[];
+  generated_at: string;
+  vix_latest: number;
+  regime: "Bull" | "Sideway" | "Bear";
+  regime_has_edge: boolean;
+  regime_criteria?: { note: string } | null;
+}
+
+export function getTodaysPicks(): Promise<TodaysPicksResponse> {
+  return apiFetch("/v1/options/todays-picks");
+}
+
+// ---------------------------------------------------------------------------
 // Candle Analysis
 // ---------------------------------------------------------------------------
 
