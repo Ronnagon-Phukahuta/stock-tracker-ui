@@ -1,6 +1,6 @@
 "use client";
 
-import { OptionsSignalTicker } from "@/lib/api";
+import { OptionsSignalTicker, ExitTimingResponse } from "@/lib/api";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -104,11 +104,13 @@ function TickerCard({
   nextTradingDay,
   marketStructure,
   vixLabel,
+  exitTiming,
 }: {
   t: OptionsSignalTicker;
   nextTradingDay: string;
   marketStructure: string | null;
   vixLabel: string | null;
+  exitTiming?: ExitTimingResponse | null;
 }) {
   const actionUpper = t.action.toUpperCase();
   const isNoTrade = actionUpper === "NO_TRADE" || actionUpper === "WAIT";
@@ -285,6 +287,39 @@ function TickerCard({
           )}
         </div>
 
+        {/* ── EXIT TIMING ── */}
+        {(() => {
+          const exitTimingTicker = exitTiming?.tickers.find(
+            (et) => et.ticker === t.ticker,
+          );
+          if (!exitTiming || !exitTimingTicker) return null;
+          const recColor =
+            exitTimingTicker.recommendation === "HOLD"
+              ? "text-green-400"
+              : exitTimingTicker.recommendation === "EXIT"
+                ? "text-red-400"
+                : "text-yellow-400";
+          return (
+            <div className="border-t border-white/10 mx-4 mt-0 mb-3 pt-2 space-y-1">
+              <p className="text-xs font-mono text-zinc-400">
+                Exit Timing · 3d return:{" "}
+                <span
+                  className={
+                    exitTimingTicker.return_3d >= 0 ? "text-emerald-400" : "text-red-400"
+                  }
+                >
+                  {(exitTimingTicker.return_3d * 100).toFixed(1)}%
+                </span>
+                {" · "}{exitTimingTicker.bucket_label}
+              </p>
+              <p className="text-xs font-mono">
+                <span className={recColor}>{exitTimingTicker.recommendation}</span>
+                {" — "}{exitTimingTicker.reasoning}
+              </p>
+            </div>
+          );
+        })()}
+
       </CardContent>
     </Card>
   );
@@ -299,11 +334,13 @@ export function OptionsSignalDisplay({
   nextTradingDay,
   marketStructure,
   vixLabel,
+  exitTiming,
 }: {
   tickers: OptionsSignalTicker[];
   nextTradingDay: string;
   marketStructure?: string | null;
   vixLabel?: string | null;
+  exitTiming?: ExitTimingResponse | null;
 }) {
   if (tickers.length === 0) {
     return (
@@ -319,6 +356,7 @@ export function OptionsSignalDisplay({
           nextTradingDay={nextTradingDay}
           marketStructure={marketStructure ?? null}
           vixLabel={vixLabel ?? null}
+          exitTiming={exitTiming}
         />
       ))}
     </div>

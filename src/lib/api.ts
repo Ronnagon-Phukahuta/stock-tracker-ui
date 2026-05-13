@@ -756,6 +756,39 @@ export function getTodaysPicks(): Promise<TodaysPicksResponse> {
 }
 
 // ---------------------------------------------------------------------------
+// Exit Timing
+// ---------------------------------------------------------------------------
+
+export interface ExitTimingTicker {
+  ticker: string;
+  return_3d: number;
+  bucket: string;
+  bucket_label: string;
+  day4_win_rate: number;
+  day4_avg_incremental: number;
+  recommendation: "HOLD" | "EXIT" | "NEUTRAL";
+  reasoning: string;
+  // Extended fields returned when entry_date params are provided
+  actual_return?: number;
+  days_held?: number;
+  next_hold_day?: number;
+  win_rate?: number;
+  avg_incremental?: number;
+  validated?: boolean;
+  regime_used?: string;
+}
+
+export interface ExitTimingResponse {
+  generated_at: string;
+  regime: string;
+  tickers: ExitTimingTicker[];
+}
+
+export function getExitTiming(): Promise<ExitTimingResponse> {
+  return apiFetch("/v1/options/exit-timing");
+}
+
+// ---------------------------------------------------------------------------
 // Candle Analysis
 // ---------------------------------------------------------------------------
 

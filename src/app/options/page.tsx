@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-import { getOptionsSignal, getOptionsTrades, getTodaysPicks } from "@/lib/api";
+import { getOptionsSignal, getOptionsTrades, getTodaysPicks, getExitTiming } from "@/lib/api";
+import { ExitTimingDisplay } from "@/components/exit-timing-display";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OptionsSignalDisplay } from "@/components/options-signal";
@@ -87,15 +88,17 @@ function breadthBadge(pct: number | null) {
 // ---------------------------------------------------------------------------
 
 export default async function OptionsPage() {
-  const [signalResult, tradesResult, picksResult] = await Promise.allSettled([
+  const [signalResult, tradesResult, picksResult, exitTimingResult] = await Promise.allSettled([
     getOptionsSignal(),
     getOptionsTrades(),
     getTodaysPicks(),
+    getExitTiming(),
   ]);
 
   const signal = signalResult.status === "fulfilled" ? signalResult.value : null;
   const trades = tradesResult.status === "fulfilled" ? tradesResult.value.items : [];
   const picksData = picksResult.status === "fulfilled" ? picksResult.value : null;
+  const exitTimingData = exitTimingResult.status === "fulfilled" ? exitTimingResult.value : null;
 
   const timestamp = new Date().toLocaleString("en-US", {
     month: "short",
@@ -139,6 +142,7 @@ export default async function OptionsPage() {
             <TabsTrigger value="signal" className="font-mono text-xs">Signal</TabsTrigger>
             <TabsTrigger value="tech-picks" className="font-mono text-xs">Tech Picks</TabsTrigger>
             <TabsTrigger value="analysis" className="font-mono text-xs">Market Analysis</TabsTrigger>
+            <TabsTrigger value="exit-timing" className="font-mono text-xs">Exit Timing</TabsTrigger>
           </TabsList>
 
           <TabsContent value="signal">
@@ -242,6 +246,7 @@ export default async function OptionsPage() {
                   nextTradingDay={nextTradingDay}
                   marketStructure={signal.market_structure}
                   vixLabel={signal.vix_label}
+                  exitTiming={exitTimingData}
                 />
               </CardContent>
             </Card>
@@ -271,6 +276,10 @@ export default async function OptionsPage() {
               picks={picksData}
               signalAction={signal?.action_now ?? "NO_TRADE"}
             />
+          </TabsContent>
+
+          <TabsContent value="exit-timing">
+            <ExitTimingDisplay data={exitTimingData} />
           </TabsContent>
         </Tabs>
       </div>
