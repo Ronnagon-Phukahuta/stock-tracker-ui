@@ -155,6 +155,66 @@ function TickerExitCard({
           {recommendationBadge(activeRec)}
         </div>
 
+        {/* ── Section 0: Entry Quality ── */}
+        {originalTicker.entry_recommendation != null && (
+          <div className="border-b border-white/10 mb-3 pb-3">
+            <p className="text-xs uppercase tracking-wider text-zinc-500 mb-2">Entry Quality</p>
+            <div className="space-y-2">
+              {originalTicker.entry_bucket != null && originalTicker.entry_bucket_label != null && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-zinc-500">Entry Bucket:</span>
+                  {bucketBadge(originalTicker.entry_bucket, originalTicker.entry_bucket_label)}
+                </div>
+              )}
+              {originalTicker.entry_day3_win_rate != null && (
+                <p className="text-xs text-zinc-400">
+                  <span className="text-zinc-500 mr-1">Day 3 Win Rate:</span>
+                  <span
+                    className={`font-semibold ${
+                      originalTicker.entry_day3_win_rate >= 0.58
+                        ? "text-emerald-400"
+                        : originalTicker.entry_day3_win_rate >= 0.54
+                          ? "text-blue-400"
+                          : "text-yellow-400"
+                    }`}
+                  >
+                    {(originalTicker.entry_day3_win_rate * 100).toFixed(1)}%
+                  </span>
+                </p>
+              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                {(() => {
+                  const rec = originalTicker.entry_recommendation;
+                  const cls =
+                    rec === "ENTER"
+                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                      : rec === "AVOID"
+                        ? "bg-red-500/20 text-red-400 border-red-500/30"
+                        : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+                  return (
+                    <Badge
+                      variant="outline"
+                      className={`${cls} text-sm font-bold tracking-widest px-4 py-1`}
+                    >
+                      {rec}
+                    </Badge>
+                  );
+                })()}
+                {originalTicker.entry_validated && (
+                  <span className="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded px-1.5 py-0.5 font-mono">
+                    ✅ WF validated
+                  </span>
+                )}
+              </div>
+              {originalTicker.entry_reasoning && (
+                <p className="text-xs font-mono italic text-zinc-500">
+                  {originalTicker.entry_reasoning}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── Section 1: Market Stats — always original data (market context, not position) ── */}
         <div>
           <p className="text-xs uppercase tracking-wider text-zinc-500 mb-2">Market Stats — 3d Return Analysis</p>

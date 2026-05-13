@@ -768,6 +768,13 @@ export interface ExitTimingTicker {
   day4_avg_incremental: number;
   recommendation: "HOLD" | "EXIT" | "NEUTRAL";
   reasoning: string;
+  // Entry quality fields
+  entry_bucket?: string;
+  entry_bucket_label?: string;
+  entry_day3_win_rate?: number;
+  entry_recommendation?: "ENTER" | "WAIT" | "AVOID";
+  entry_validated?: boolean;
+  entry_reasoning?: string;
   // Extended fields returned when entry_date params are provided
   actual_return?: number;
   days_held?: number;

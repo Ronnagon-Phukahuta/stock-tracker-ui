@@ -3,6 +3,7 @@ export const fetchCache = "force-no-store";
 
 import { getOptionsSignal, getOptionsTrades, getTodaysPicks, getExitTiming } from "@/lib/api";
 import { ExitTimingDisplay } from "@/components/exit-timing-display";
+import { PlaybookDisplay } from "@/components/playbook-display";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OptionsSignalDisplay } from "@/components/options-signal";
@@ -143,6 +144,7 @@ export default async function OptionsPage() {
             <TabsTrigger value="tech-picks" className="font-mono text-xs">Tech Picks</TabsTrigger>
             <TabsTrigger value="analysis" className="font-mono text-xs">Market Analysis</TabsTrigger>
             <TabsTrigger value="exit-timing" className="font-mono text-xs">Exit Timing</TabsTrigger>
+            <TabsTrigger value="playbook" className="font-mono text-xs">Playbook</TabsTrigger>
           </TabsList>
 
           <TabsContent value="signal">
@@ -280,6 +282,13 @@ export default async function OptionsPage() {
 
           <TabsContent value="exit-timing">
             <ExitTimingDisplay data={exitTimingData} />
+          </TabsContent>
+
+          <TabsContent value="playbook">
+            <PlaybookDisplay
+              signalData={signal}
+              exitTimingData={exitTimingData}
+            />
           </TabsContent>
         </Tabs>
       </div>
