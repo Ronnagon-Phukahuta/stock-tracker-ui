@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { OptionsTrade } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -294,6 +294,39 @@ export function OptionsTradesManager({ initialTrades }: { initialTrades: Options
 
   const trades = [...initialTrades].sort((a, b) => b.date.localeCompare(a.date));
 
+  // ---------------------------------------------------------------------------
+  // Filter state
+  // ---------------------------------------------------------------------------
+  const [tickerFilter, setTickerFilter] = useState<"All" | "SPY" | "QQQ" | "Other">("All");
+  const [typeFilter, setTypeFilter] = useState<"All" | "CALL" | "PUT">("All");
+  const [noteFilter, setNoteFilter] = useState<string>("All");
+
+  // Unique note values derived from trades (original casing, deduped case-insensitively)
+  const noteValues = useMemo(() => {
+    const seen = new Map<string, string>(); // lowercase key → first-seen display value
+    for (const t of trades) {
+      if (t.note) {
+        const key = t.note.toLowerCase();
+        if (!seen.has(key)) seen.set(key, t.note);
+      }
+    }
+    return Array.from(seen.values()).sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    );
+  }, [trades]);
+
+  // Filtered trades — AND logic across all three filters
+  const filteredTrades = useMemo(() => {
+    return trades.filter((t) => {
+      if (tickerFilter === "SPY" && t.ticker.toUpperCase() !== "SPY") return false;
+      if (tickerFilter === "QQQ" && t.ticker.toUpperCase() !== "QQQ") return false;
+      if (tickerFilter === "Other" && ["SPY", "QQQ"].includes(t.ticker.toUpperCase())) return false;
+      if (typeFilter !== "All" && t.type?.toUpperCase() !== typeFilter) return false;
+      if (noteFilter !== "All" && (t.note?.toLowerCase() ?? "") !== noteFilter.toLowerCase()) return false;
+      return true;
+    });
+  }, [trades, tickerFilter, typeFilter, noteFilter]);
+
   function handleSaved() {
     setShowAdd(false);
     router.refresh();
@@ -318,12 +351,12 @@ export function OptionsTradesManager({ initialTrades }: { initialTrades: Options
   }
 
   // -------------------------------------------------------------------------
-  // Summary stats
+  // Summary stats (recalculate based on filtered trades)
   // -------------------------------------------------------------------------
-  const totalPnl = trades.reduce((s, t) => s + t.pnl, 0);
-  const wins = trades.filter((t) => t.pnl > 0).length;
-  const winRate = trades.length > 0 ? (wins / trades.length) * 100 : null;
-  const avgPnl = trades.length > 0 ? totalPnl / trades.length : null;
+  const totalPnl = filteredTrades.reduce((s, t) => s + t.pnl, 0);
+  const wins = filteredTrades.filter((t) => t.pnl > 0).length;
+  const winRate = filteredTrades.length > 0 ? (wins / filteredTrades.length) * 100 : null;
+  const avgPnl = filteredTrades.length > 0 ? totalPnl / filteredTrades.length : null;
 
   return (
     <>
@@ -378,7 +411,11 @@ export function OptionsTradesManager({ initialTrades }: { initialTrades: Options
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <p className="text-[10px] uppercase tracking-widest text-zinc-400">Options Trading History</p>
-            <span className="text-[10px] text-zinc-600">{trades.length} trades</span>
+            <span className="text-[10px] text-zinc-600">
+              {filteredTrades.length === trades.length
+                ? `${trades.length} trades`
+                : `${filteredTrades.length} / ${trades.length} trades`}
+            </span>
           </div>
           <Button
             size="sm"
@@ -457,13 +494,83 @@ export function OptionsTradesManager({ initialTrades }: { initialTrades: Options
           </Card>
         </div>
 
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          {/* Ticker */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500 w-10">Ticker</span>
+            {(["All", "SPY", "QQQ", "Other"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setTickerFilter(v)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                  tickerFilter === v
+                    ? "bg-violet-600 text-white"
+                    : "bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60 border border-zinc-700"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+
+          {/* Type */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500 w-10">Type</span>
+            {(["All", "CALL", "PUT"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setTypeFilter(v)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                  typeFilter === v
+                    ? "bg-violet-600 text-white"
+                    : v === "CALL"
+                      ? "bg-zinc-800/60 text-emerald-400 hover:bg-zinc-700/60 border border-zinc-700"
+                      : v === "PUT"
+                        ? "bg-zinc-800/60 text-red-400 hover:bg-zinc-700/60 border border-zinc-700"
+                        : "bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60 border border-zinc-700"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+
+          {/* Note */}
+          {noteValues.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-widest text-zinc-500 w-10">Note</span>
+              {(["All", ...noteValues]).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setNoteFilter(v)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                    noteFilter === v
+                      ? "bg-violet-600 text-white"
+                      : "bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60 border border-zinc-700"
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Trade history table */}
         <div className="rounded-lg border border-zinc-800/80 overflow-hidden">
-          <div className="px-4 py-3 border-b border-zinc-800/80">
+          <div className="px-4 py-3 border-b border-zinc-800/80 flex items-center justify-between">
             <p className="text-[10px] uppercase tracking-widest text-zinc-400">Trade History</p>
+            {filteredTrades.length !== trades.length && (
+              <span className="text-[10px] text-zinc-500">
+                Showing {filteredTrades.length} / {trades.length} trades
+              </span>
+            )}
           </div>
           {trades.length === 0 ? (
             <div className="px-4 py-8 text-center text-zinc-500 text-xs">No options trades found.</div>
+          ) : filteredTrades.length === 0 ? (
+            <div className="px-4 py-8 text-center text-zinc-500 text-xs">No trades match the current filters.</div>
           ) : (
             <table className="w-full text-sm font-mono">
               <thead>
@@ -480,7 +587,9 @@ export function OptionsTradesManager({ initialTrades }: { initialTrades: Options
                 </tr>
               </thead>
               <tbody>
-                {trades.map((trade, i) => (
+                {filteredTrades.map((trade) => {
+                  const i = trades.indexOf(trade);
+                  return (
                   <tr key={i} className="border-b border-zinc-800/40 hover:bg-zinc-800/20 group">
                     <td className="px-4 py-3 text-zinc-300 tabular-nums">{trade.date.slice(0, 10)}</td>
                     <td className="px-4 py-3 text-zinc-100 font-semibold">{trade.ticker}</td>
@@ -504,12 +613,20 @@ export function OptionsTradesManager({ initialTrades }: { initialTrades: Options
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {trade.note?.toLowerCase() === "demo" ? (
+                      {!trade.note ? (
+                        <span className="text-zinc-500 text-xs">—</span>
+                      ) : trade.note.toLowerCase() === "demo" ? (
                         <span className="inline-flex items-center rounded-full bg-violet-500/20 border border-violet-500/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-violet-300">
-                          Demo
+                          {trade.note}
+                        </span>
+                      ) : trade.note.toLowerCase() === "prod" ? (
+                        <span className="inline-flex items-center rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-emerald-300">
+                          {trade.note}
                         </span>
                       ) : (
-                        <span className="text-zinc-500 text-xs">{trade.note ?? "—"}</span>
+                        <span className="inline-flex items-center rounded-full bg-zinc-700/50 border border-zinc-600/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-zinc-400">
+                          {trade.note}
+                        </span>
                       )}
                     </td>
                     <td className="px-2 py-3">
@@ -522,7 +639,8 @@ export function OptionsTradesManager({ initialTrades }: { initialTrades: Options
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

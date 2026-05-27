@@ -859,6 +859,8 @@ export interface CandleAnalysisResponse {
   current_vix?: number | null;
   current_vix_band?: string | null;
   transition_risk?: TransitionRisk | null;
+  current_spy_streak_days?: number | null;
+  current_spy_direction?: string | null;
 }
 
 export function getCandleAnalysis(): Promise<CandleAnalysisResponse> {
