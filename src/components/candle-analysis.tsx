@@ -596,14 +596,22 @@ const BULL_INTRADAY_HIT_ROWS = [
 function BullUpStreakCard({
   spyStreakDays,
   spyDirection,
+  prevSpyUpStreakDays,
 }: {
   spyStreakDays?: number | null;
   spyDirection?: string | null;
+  prevSpyUpStreakDays?: number | null;
 }) {
   const dir = spyDirection?.toUpperCase() ?? null;
   const isUp = dir === "UP";
   const isDn = dir === "DOWN";
-  const activeUpN = (isUp && spyStreakDays != null) ? spyStreakDays : null;
+  // When UP: use current streak for the UP row.
+  // When DN: use prev_spy_up_streak_days as the UP bucket row, and current streak as DN depth.
+  const activeUpN = isUp
+    ? (spyStreakDays ?? null)
+    : isDn
+      ? (prevSpyUpStreakDays ?? null)
+      : null;
   const activeDnN = (isDn && spyStreakDays != null) ? spyStreakDays : null;
 
   const activeUpRow = activeUpN !== null
@@ -672,6 +680,13 @@ function BullUpStreakCard({
                   ? "เข้า CALL ได้เลย — dip ถึง threshold แล้ว"
                   : `รออีก ${2 - activeDnN}d หรือตรวจ WR ตาม UP streak ก่อนหน้า`}
               </p>
+              {activeUpRow && activeUpN !== null && (
+                <p className="text-xs text-zinc-400 mt-1">
+                  UP bucket:{" "}
+                  <span className="font-bold text-emerald-300">UP {activeUpN}d</span>
+                  {" — "}{activeUpRow.action.split(" · ")[0]}
+                </p>
+              )}
             </>
           ) : (
             <p className="text-sm text-zinc-500">Streak data unavailable</p>
@@ -1006,6 +1021,7 @@ export async function CandleAnalysis({ marketStructure }: { marketStructure?: st
             <BullUpStreakCard
               spyStreakDays={data?.current_spy_streak_days}
               spyDirection={data?.current_spy_direction}
+              prevSpyUpStreakDays={data?.prev_spy_up_streak_days}
             />
             <BullIntradayHitCard
               currentVixBand={data?.current_vix_band}

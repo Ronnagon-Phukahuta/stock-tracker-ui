@@ -861,6 +861,7 @@ export interface CandleAnalysisResponse {
   transition_risk?: TransitionRisk | null;
   current_spy_streak_days?: number | null;
   current_spy_direction?: string | null;
+  prev_spy_up_streak_days?: number | null;
 }
 
 export function getCandleAnalysis(): Promise<CandleAnalysisResponse> {
