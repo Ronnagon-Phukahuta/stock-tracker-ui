@@ -1018,3 +1018,50 @@ export async function getBacktestResults(): Promise<BacktestRow[]> {
   const json = await res.json() as { items?: BacktestRow[] };
   return json.items ?? [];
 }
+
+// ---------------------------------------------------------------------------
+// Sector Rotation
+// ---------------------------------------------------------------------------
+
+export interface SectorRotationItem {
+  sector: string;
+  etf_ticker: string | null;
+  stock_count: number;
+  total_market_cap: number;
+  avg_change_1d: number;
+  avg_change_1w: number;
+  avg_change_1m: number;
+  avg_volatility: number;
+  sector_momentum_spread: number;
+  etf_return_1d: number | null;
+  etf_return_1w: number | null;
+  etf_return_1m: number | null;
+  last_updated: string;
+}
+
+export function getSectorRotation(): Promise<ListResponse<SectorRotationItem>> {
+  return apiFetch("/v1/market/sector-rotation");
+}
+
+export interface SectorStockItem {
+  ticker: string;
+  company_name: string;
+  rs_score: number;
+  change_1d: number;
+  change_1w: number;
+  change_1m: number;
+  momentum_signal: string;
+  price: number;
+}
+
+export interface SectorStocksResponse {
+  sector: string;
+  stocks: SectorStockItem[];
+  count: number;
+}
+
+export async function getSectorStocks(sector: string): Promise<SectorStocksResponse> {
+  const res = await fetch(`/api/sector-rotation/${encodeURIComponent(sector)}`);
+  if (!res.ok) throw new Error(`API error ${res.status} — sector stocks`);
+  return res.json() as Promise<SectorStocksResponse>;
+}
