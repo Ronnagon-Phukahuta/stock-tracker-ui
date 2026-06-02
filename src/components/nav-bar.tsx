@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: "/options/universe", label: "Options Universe" },
   { href: "/rotation", label: "Rotation" },
   { href: "/sector-rotation", label: "Sectors" },
+  { href: "/analytics", label: "Analytics" },
 ];
 
 async function handleLogout() {

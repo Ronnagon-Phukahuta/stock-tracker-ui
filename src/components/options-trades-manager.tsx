@@ -53,6 +53,7 @@ interface TradeDraft {
   strike: string;
   expiry: string;
   contracts: string;
+  premium_per_contract: string;
   pnl: string;
   note: string;
 }
@@ -65,6 +66,7 @@ function emptyDraft(): TradeDraft {
     strike: "",
     expiry: "",
     contracts: "1",
+    premium_per_contract: "",
     pnl: "",
     note: "",
   };
@@ -94,12 +96,15 @@ function AddTradeModal({
     const strike = parseFloat(draft.strike);
     const contracts = parseInt(draft.contracts, 10);
     const pnl = parseFloat(draft.pnl);
+    const premium_per_contract = draft.premium_per_contract !== "" ? parseFloat(draft.premium_per_contract) : null;
 
     if (!draft.date) { setError("Date is required"); return; }
     if (!draft.ticker.trim()) { setError("Ticker is required"); return; }
+
     if (isNaN(strike) || strike <= 0) { setError("Enter a valid strike price"); return; }
     if (!draft.expiry) { setError("Expiry is required"); return; }
     if (isNaN(contracts) || contracts < 1) { setError("Contracts must be at least 1"); return; }
+    if (premium_per_contract !== null && (isNaN(premium_per_contract) || premium_per_contract <= 0)) { setError("Enter a valid premium per contract"); return; }
     if (isNaN(pnl)) { setError("Enter a valid P&L (can be negative)"); return; }
 
     setError(null);
@@ -112,6 +117,7 @@ function AddTradeModal({
           strike,
           expiry: draft.expiry,
           contracts,
+          premium_per_contract,
           pnl,
           note: draft.note.trim() || null,
         });
@@ -221,18 +227,32 @@ function AddTradeModal({
             </div>
           </div>
 
-          {/* P&L */}
-          <div>
-            <label className="block text-[10px] uppercase tracking-widest text-zinc-400 mb-1">P&amp;L (can be negative)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={draft.pnl}
-              onChange={(e) => set("pnl", e.target.value)}
-              placeholder="-250.00"
-              required
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-violet-500 font-mono"
-            />
+          {/* Premium per contract + P&L */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest text-zinc-400 mb-1">Premium / Contract</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={draft.premium_per_contract}
+                onChange={(e) => set("premium_per_contract", e.target.value)}
+                placeholder="2.50"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-violet-500 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest text-zinc-400 mb-1">P&amp;L (can be negative)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={draft.pnl}
+                onChange={(e) => set("pnl", e.target.value)}
+                placeholder="-250.00"
+                required
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-violet-500 font-mono"
+              />
+            </div>
           </div>
 
           {/* Note */}

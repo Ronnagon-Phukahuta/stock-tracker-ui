@@ -610,8 +610,34 @@ export interface OptionsTrade {
   strike: number;
   expiry: string;
   contracts: number;
+  premium_per_contract?: number | null;
   pnl: number;
   note?: string | null;
+}
+
+export interface AnalyticsData {
+  account_capital: number | null;
+  total_capital_deployed: number;
+  total_pnl: number;
+  roi_percent: number;
+  win_rate: number;
+  avg_hold_days: number;
+  avg_win: number | null;
+  avg_loss: number | null;
+  risk_reward_ratio: number | null;
+  max_drawdown_portfolio: number | null;
+  worst_trade: number | null;
+  avg_dte: number | null;
+  avg_hold_time_ratio: number | null;
+  cumulative_pnl_over_time: { date: string; value: number }[];
+  pnl_per_trade: { date: string; value: number }[];
+  win_rate_by_ticker: Record<string, number>;
+  trade_count_by_ticker: Record<string, number>;
+  net_pnl_by_ticker?: Record<string, number>;
+}
+
+export function getAnalytics(): Promise<AnalyticsData> {
+  return apiFetch("/v1/portfolio/options-trades/analytics");
 }
 
 export function getOptionsTrades(): Promise<ListResponse<OptionsTrade>> {

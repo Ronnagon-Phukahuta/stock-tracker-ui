@@ -732,7 +732,7 @@ function NextSatelliteSection({
   // ── Layer 1: Edge-based ──────────────────────────────────────────────────
   const layer1 = Object.entries(candidatesMap)
     .flatMap(([fromTicker, candidates]) =>
-      candidates.map((c) => ({ ...c, from_ticker: fromTicker }))
+      (candidates ?? []).map((c) => ({ ...c, from_ticker: fromTicker }))
     )
     .filter((c) => !portfolioTickers.has(c.ticker_b))
     .sort((a, b) => b.rotation_score - a.rotation_score)
@@ -2127,6 +2127,7 @@ export function RotationDashboard({
   // Compute median momentum_score across ALL candidates from all satellites
   const allScores: number[] = Object.values(candidatesMap)
     .flat()
+    .filter((c) => c != null && c.momentum_score != null)
     .map((c) => c.momentum_score);
   const medianMomentum = median(allScores);
 
