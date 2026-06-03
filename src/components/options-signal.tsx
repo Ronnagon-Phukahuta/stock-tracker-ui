@@ -159,6 +159,11 @@ function TickerCard({
           <SectionHeader label="Tomorrow's Action" />
           <ActionBadge action={t.action} />
           <p className="text-xs text-zinc-400 leading-relaxed">{actionReason}</p>
+          {t.ticker === "SPY" && marketStructure && marketStructure.toLowerCase().includes("sideway") && (
+            <p className="text-[10px] text-gray-400">
+              Flat threshold: ≤+0.50% counts as down-streak
+            </p>
+          )}
 
           {/* Transition risk skip warning */}
           {t.mining_skip_reason && (
@@ -258,10 +263,12 @@ function TickerCard({
         <div className="border-t border-zinc-700 px-4 pt-4 pb-4 space-y-2">
           <SectionHeader label="Re-Entry Signal" />
           {streakLabel && (
-            <p className="text-xs text-zinc-400">
-              <span className="font-bold text-white">{streakLabel}</span>
-              {streakNeed && <span className="text-zinc-500 ml-1.5">{streakNeed}</span>}
-            </p>
+            <>
+              <p className="text-xs text-zinc-400">
+                <span className="font-bold text-white">{streakLabel}</span>
+                {streakNeed && <span className="text-zinc-500 ml-1.5">{streakNeed}</span>}
+              </p>
+            </>
           )}
           {threshold && (
             <p className="text-[10px] text-zinc-500">{threshold}</p>
